@@ -3,10 +3,11 @@
 #include "protocol.h"
 #include "stdlib.h"
 #include "stdio.h"
+#include "scheduler/dispatcher.h"
 
 void controller(int max_commands, int scheduler_algorithm){ // para ja sem argumentos -> futuramente recebe o numero de comandos a executar concorrentemente, e também a politica a executar
 
-	//Scheduler scheduler initialize_scheduler(scheduler_algorithm); 
+	Scheduler* scheduler =initialize_scheduler(scheduler_algorithm); 
     
     int fd = open("tmp/controller_pipe",  O_RDONLY); 
     int acabou  = 0; 
@@ -23,10 +24,9 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
                     break; 
                case TERMINATED: 
                     current_commands--;
-                    //terminated(p.id) ->  não deve ser preciso
                     break;
                case EXECUTE: 
-					// addScheduler()
+					addCommand(scheduler, getUserId(p), getCreatedTimestamps(p), getCommandId(p));
                     break; 
                case LIST: 
                     int pid = fork(); 
@@ -37,7 +37,7 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
     	}
 
 		if (current_commands < max_commands){
-			// getNext()
+			int command_id = getNext(scheduler);
 			current_commands++;
 			//notifyRunner()
 		}
