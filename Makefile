@@ -38,4 +38,4 @@ format:
 	@printf "\nFormatted all available files.\n"
 
 clean:
-	rm -f obj/* tmp/* bin/*
+	rm -rf obj/* tmp/* bin/*
