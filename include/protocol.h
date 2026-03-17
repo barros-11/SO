@@ -46,14 +46,14 @@ int getPid(const Protocol *p);
  * * @param ci The command ID to set.
  * @param p Pointer to the Protocol structure to modify.
  */
-void setCommandId(pid_t ci, Protocol *p);
+void setCommandId(int ci, Protocol *p);
 
 /**
  * @brief Gets the unique command ID from the protocol message.
  * * @param p Pointer to the Protocol structure.
  * @return The command ID.
  */
-pid_t getCommandId(const Protocol *p);
+int getCommandId(const Protocol *p);
 
 /**
  * @brief Sets the user ID in the protocol message.

@@ -6,9 +6,9 @@ typedef struct scheduler Scheduler;
 /** 
  * @brief Initializes the scheduler based on the specified algorithm.
  * @param scheduler_algorithm An integer representing the scheduling algorithm to use (e.g., 0 for FCFS, 1 for SJF).
- * @return A Scheduler struct initialized with the appropriate function pointers and data for the specified algorithm.
+ * @return A pointer to a Scheduler initialized with the appropriate function pointers and data for the specified algorithm.
  */
-Scheduler initialize_scheduler(int scheduler_algorithm);
+Scheduler *initialize_scheduler(int scheduler_algorithm);
 
 /**
  * @brief Adds a command to the scheduler's structure.
