@@ -14,9 +14,9 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
     int current_commands = 0; // number of commands being run
 	while (current_commands|| !acabou){
         // if we didnt end and (we dont have commands to execute or we cant put any more commands to execute at the same time) -> we wait for a new protocol
-       if (!acabou && (current_commands == 0 || current_commands == max_commands)){ 
+       if (!acabou && (!has_commands(scheduler) || current_commands == max_commands)){ 
            Protocol *p = malloc(getProtocolSize()); 
-           ssize_t size = read(fd, &p, getProtocolSize());
+           ssize_t size = read(fd, p, getProtocolSize());
            if (size <= 0 || size != getProtocolSize()){
                free(p);
                close(fd);
@@ -41,9 +41,10 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
                         // list_commands(); 
                     break; 
            }
+           free(p);
     	}
 
-		if (current_commands < max_commands){
+		if (current_commands < max_commands &&  has_commands(scheduler)){
 			int command_id = getNext(scheduler);
 			current_commands++;
 			//notifyRunner(command_id, flag para comerçar a rodar)
