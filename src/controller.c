@@ -15,10 +15,16 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
 	while (current_commands|| !acabou){
         // if we didnt end and (we dont have commands to execute or we cant put any more commands to execute at the same time) -> we wait for a new protocol
        if (!acabou && (current_commands == 0 || current_commands == max_commands)){ 
-           Protocol *p = malloc(getPrococolSize()); 
+           Protocol *p = malloc(getProtocolSize()); 
            ssize_t size = read(fd, &p, getProtocolSize());
+           if (size <= 0 || size != getProtocolSize()){
+               free(p);
+               close(fd);
+               printf("Error reading from pipe or incomplete protocol message\n");
+               return; 
+           }
     
-        	switch(getStatus(p)){
+        	switch(getType(p)){
               case END:
                     acabou = 1;
                     break; 
@@ -26,7 +32,8 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
                     current_commands--;
                     break;
                case EXECUTE: 
-					addCommand(scheduler, getUserId(p), getCreatedTimestamps(p), getCommandId(p));
+					int  command_id = addCommand(scheduler, getUserId(p), getCreatedTimestamps(p));
+                    // notifyRunner(command_id, flag de ser submetida);
                     break; 
                case LIST: 
                     int pid = fork(); 
@@ -39,9 +46,10 @@ void controller(int max_commands, int scheduler_algorithm){ // para ja sem argum
 		if (current_commands < max_commands){
 			int command_id = getNext(scheduler);
 			current_commands++;
-			//notifyRunner()
+			//notifyRunner(command_id, flag para comerçar a rodar)
 		}
 	}
+    cleanup(scheduler);
     close(fd);
 }
 

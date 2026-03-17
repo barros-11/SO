@@ -18,7 +18,7 @@ typedef enum type Type;
  * * @param p Pointer to the Protocol structure.
  * @return The Type of the message.
  */
-Type getType(const Protocol *p);
+Type getType( Protocol *p);
 
 /**
  * @brief Sets the status/type of the protocol message.
@@ -39,21 +39,8 @@ void setPid(int pid, Protocol *p);
  * * @param p Pointer to the Protocol structure.
  * @return The PID of the runner.
  */
-int getPid(const Protocol *p);
+int getPid( Protocol *p);
 
-/**
- * @brief Sets the unique command ID in the protocol message.
- * * @param ci The command ID to set.
- * @param p Pointer to the Protocol structure to modify.
- */
-void setCommandId(pid_t ci, Protocol *p);
-
-/**
- * @brief Gets the unique command ID from the protocol message.
- * * @param p Pointer to the Protocol structure.
- * @return The command ID.
- */
-pid_t getCommandId(const Protocol *p);
 
 /**
  * @brief Sets the user ID in the protocol message.
@@ -67,7 +54,7 @@ void setUserId(int ui, Protocol *p);
  * * @param p Pointer to the Protocol structure.
  * @return The user ID.
  */
-int getUserId(const Protocol *p);
+int getUserId( Protocol *p);
 
 /**
  * @brief Sets the creation timestamp in the protocol message.
@@ -81,7 +68,7 @@ void setCreatedTimestamps(long ts, Protocol *p);
  * * @param p Pointer to the Protocol structure.
  * @return The creation timestamp.
  */
-long getCreatedTimestamps(const Protocol *p);
+long getCreatedTimestamps( Protocol *p);
 
 /**
  * @brief Gets the size of the Protocol structure.

@@ -5,8 +5,7 @@
 
 struct protocol {
     Type status; 
-    int user_id;  
-    pid_t command_id; 
+    int user_id;
     int pid;  
     long created_timestamps;  
 };
@@ -25,14 +24,6 @@ void setPid(int pid, Protocol *p){
 
 int getPid(Protocol *p){
     return p->pid; 
-}
-
-void setCommandId(int ci, Protocol *p){
-    p->command_id = ci; 
-}
-
-int getCommandId(Protocol *p){
-    return p->command_id; 
 }
 
 void setUserId(int ui, Protocol *p){

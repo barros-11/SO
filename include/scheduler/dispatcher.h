@@ -8,7 +8,7 @@ typedef struct scheduler Scheduler;
  * @param scheduler_algorithm An integer representing the scheduling algorithm to use (e.g., 0 for FCFS, 1 for SJF).
  * @return A Scheduler struct initialized with the appropriate function pointers and data for the specified algorithm.
  */
-Scheduler initialize_scheduler(int scheduler_algorithm);
+Scheduler* initialize_scheduler(int scheduler_algorithm);
 
 /**
  * @brief Adds a command to the scheduler's structure.
@@ -17,7 +17,7 @@ Scheduler initialize_scheduler(int scheduler_algorithm);
  * @param created_timestamp The timestamp when the command was created.
  * @param command_id The ID of the command to be added.
  */
-void addCommand(Scheduler *s, int user_id, double created_timestamp, int command_id);
+int addCommand(Scheduler *s, int user_id, double created_timestamp);
 
 /**
  * @brief Retrieves the next command to be executed based on the scheduling algorithm.

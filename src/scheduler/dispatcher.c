@@ -6,16 +6,16 @@
 #include "stdio.h"
 
 struct scheduler {
-    void (*addCommand)(int user_id, double created_timestamps, int command_id, void *data); 
+    void (*addCommand)(int user_id, double created_timestamps, int command_id, void *data);  // returns the command_id 
     int (*getNext)(void *data);
     void (*cleanup)(void *data);
     int total_commands;
     void *data;
 };
 
-Scheduler initialize_scheduler(int scheduler_algorithm){
-    Scheduler s; 
-    s.total_commands = 0; 
+Scheduler* initialize_scheduler(int scheduler_algorithm){
+    Scheduler *s = malloc(sizeof(Scheduler));
+    s->total_commands = 0; 
     switch(scheduler_algorithm){
         case 0: // FCFS
             // s.addCommand = addCommandFCFS; 
@@ -29,8 +29,9 @@ Scheduler initialize_scheduler(int scheduler_algorithm){
     return s;
 }
 
-void addCommand(Scheduler *s, int user_id, double created_timestamp, int command_id){
-    s->addCommand(user_id, created_timestamp, command_id, s->data);
+int addCommand(Scheduler *s, int user_id, double created_timestamp){
+    s->addCommand(user_id, created_timestamp, s->total_commands, s->data);
+    return s->total_commands++;
 }
 
 int getNext(Scheduler *s){
