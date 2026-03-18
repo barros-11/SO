@@ -13,6 +13,12 @@ SRC := $(shell find src/ -name "*.c")
 
 all: folders controller runner
 
+//Todo: remove these (testing)
+test-rr: bin/round_robin_test
+
+bin/round_robin_test: src/scheduler/round_robin_test.c src/scheduler/round_robin.c
+	$(CC) $(CFLAGS) $(GLIB_CFLAGS) $^ -o $@ $(GLIB_LIBS)
+
 controller: bin/controller
 
 runner: bin/runner
