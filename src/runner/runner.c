@@ -1,0 +1,131 @@
+/**
+ * @file runner.c
+ * @brief Ponto de entrada para o componente Runner do sistema de orquestração.
+ * * Este componente atua como cliente, enviando pedidos de execução, consulta
+ * e encerramento ao Controller através de Named Pipes (FIFOs).
+ */
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "runner/runner.h"
+#include "protocol.h"
+#include "runner/communication.h"
+#include "runner/executor.h"
+
+/**
+ * @brief Imprime uma mensagem no terminal com a etiqueta padrão [runner].
+ * * @param message A mensagem a ser exibida.
+ */
+void print_runner_msg(const char *message) {
+    char buffer[256];
+    int len = snprintf(buffer, sizeof(buffer), "[runner] %s\n", message);
+    if (len > 0) {
+        // Uso de write para garantir atomicidade e cumprir restrições da UC
+        write(STDOUT_FILENO, buffer, len);
+    }
+}
+
+/**
+ * @brief Função principal do Runner.
+ * * Gere os argumentos da linha de comandos e despacha para os modos:
+ * - EXECUÇÃO (-e): Submete um comando para ser escalonado e executado.
+ * - CONSULTA (-c): Lista os comandos em execução e em espera no sistema.
+ * - SHUTDOWN (-s): Notifica o controller para encerrar os serviços.
+ */
+int main(int argc, char *argv[]) {
+    // Validação mínima de argumentos: ./runner <modo> [args]
+    if (argc < 2) {
+        write(STDERR_FILENO, "Uso: ./runner [-e user_id cmd | -c | -s]\n", 41);
+        return 1;
+    }
+
+    Protocol *p = malloc(getProtocolSize());
+    int my_pid = getpid();
+
+    // --- MODO DE EXECUÇÃO (-e) ---
+    if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
+        
+        setType(EXECUTE, p);
+        setPid(my_pid, p);
+        setUserId(atoi(argv[2]), p);
+
+        create_response_pipe(my_pid);
+        
+        char msg[128];
+        snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
+        print_runner_msg(msg);
+
+        if (send_to_controller(p) != 0) {
+            print_runner_msg("Erro: o controller não está a correr ou o pipe principal falhou");
+            cleanup_pipe(my_pid);
+            free(p);
+            return 1;
+        }
+        
+        wait_for_go(my_pid);
+        
+        print_runner_msg("executing command...");
+
+        execute_command(argc - 3, &argv[3]);
+
+        setType(TERMINATED, p);
+        send_to_controller(p);
+        
+        print_runner_msg("command finished");
+
+    } 
+    // --- MODO DE CONSULTA (-c) ---
+    else if (strcmp(argv[1], "-c") == 0) {
+        
+        setType(LIST, p);
+        setPid(my_pid, p);
+        
+        if (create_response_pipe(my_pid) != 0) {
+            perror("[runner] Erro ao criar pipe de resposta");
+            free(p);
+            return 1;
+        }
+
+        if (send_to_controller(p) != 0) {
+            print_runner_msg("Erro: o controller não está a correr");
+            cleanup_pipe(my_pid);
+            free(p);
+            return 1;
+        }
+        
+        read_list_response(my_pid);
+
+        cleanup_pipe(my_pid);        
+    } 
+    // --- MODO DE ENCERRAMENTO (-s) ---
+    else if (strcmp(argv[1], "-s") == 0) {
+        
+        setType(END, p);
+        setPid(my_pid, p);
+
+        if (create_response_pipe(my_pid) != 0) {
+            perror("[runner] Erro ao criar pipe de resposta");
+            free(p);
+            return 1;
+        }
+
+        if (send_to_controller(p) != 0) {
+            print_runner_msg("Erro: o controller não está a correr");
+            cleanup_pipe(my_pid);
+            free(p);
+            return 1;
+        }
+
+        print_runner_msg("sent shutdown notification");
+        print_runner_msg("waiting for controller to shutdown....");
+        
+        wait_for_go(my_pid); 
+        print_runner_msg("controller exited.");
+    }
+
+    cleanup_pipe(my_pid);
+    free(p);
+    return 0;
+}
