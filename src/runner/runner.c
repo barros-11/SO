@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/time.h>
 #include "runner/runner.h"
 #include "protocol.h"
 #include "runner/communication.h"
@@ -43,19 +44,21 @@ int main(int argc, char *argv[]) {
 
     Protocol *p = malloc(getProtocolSize());
     int my_pid = getpid();
+    char msg[128];
+
+    setPid(my_pid, p);
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    setCreatedTimestamps(timestamp, p);
 
     // --- MODO DE EXECUÇÃO (-e) ---
     if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
-        
         setType(EXECUTE, p);
-        setPid(my_pid, p);
         setUserId(atoi(argv[2]), p);
 
         create_response_pipe(my_pid);
-        
-        char msg[128];
-        snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
-        print_runner_msg(msg);
 
         if (send_to_controller(p) != 0) {
             print_runner_msg("Erro: o controller não está a correr ou o pipe principal falhou");
@@ -63,24 +66,26 @@ int main(int argc, char *argv[]) {
             free(p);
             return 1;
         }
+
+        snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
+        print_runner_msg(msg);
         
         wait_for_go(my_pid);
         
-        print_runner_msg("executing command...");
+        snprintf(msg, sizeof(msg), "executing command %d...", my_pid);
+        print_runner_msg(msg);
 
         execute_command(argc - 3, &argv[3]);
 
         setType(TERMINATED, p);
         send_to_controller(p);
         
-        print_runner_msg("command finished");
-
+        snprintf(msg, sizeof(msg), "command %d finished", my_pid);
+        print_runner_msg(msg);
     } 
     // --- MODO DE CONSULTA (-c) ---
-    else if (strcmp(argv[1], "-c") == 0) {
-        
+    else if (strcmp(argv[1], "-c") == 0) {        
         setType(LIST, p);
-        setPid(my_pid, p);
         
         if (create_response_pipe(my_pid) != 0) {
             perror("[runner] Erro ao criar pipe de resposta");
@@ -96,14 +101,10 @@ int main(int argc, char *argv[]) {
         }
         
         read_list_response(my_pid);
-
-        cleanup_pipe(my_pid);        
     } 
     // --- MODO DE ENCERRAMENTO (-s) ---
     else if (strcmp(argv[1], "-s") == 0) {
-        
         setType(END, p);
-        setPid(my_pid, p);
 
         if (create_response_pipe(my_pid) != 0) {
             perror("[runner] Erro ao criar pipe de resposta");
