@@ -7,7 +7,7 @@
 
 void controller(int max_commands, int scheduler_algorithm){ // para ja sem argumentos -> futuramente recebe o numero de comandos a executar concorrentemente, e também a politica a executar
 
-	Scheduler* scheduler =initialize_scheduler(scheduler_algorithm); 
+	Scheduler* scheduler = initialize_scheduler(scheduler_algorithm); 
     
     int fd = open("tmp/controller_pipe",  O_RDONLY); 
     int acabou  = 0; 
