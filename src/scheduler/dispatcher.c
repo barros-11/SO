@@ -16,6 +16,7 @@ struct scheduler {
     char *(*list_commands)(void *data); 
     int total_commands;
     void *data;
+    // bellow are the data structers to keep track of the commands currenlty being executed
     GHashTable * table;  // maps a command in to the pointer in the linked list bellow
     GQueue * list;  // linked list with the commands that are currently running
 };
@@ -74,7 +75,7 @@ void set_list_commands_function(Scheduler*s, char* (*list_commands)(void *data))
 
 void cleanup(Scheduler *s){
     g_hash_table_destroy(s->table);
-    g_queue_clear_full(s->list, free);
+    g_queue_free_full(s->list, free);
     s->cleanup(s->data);
     free(s);
 }
@@ -109,6 +110,7 @@ void remove_command(Scheduler *s, int command_id){
     gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
     if (element != NULL) {
         GList *elem = (GList *)element;
+        free(elem->data);
         g_queue_delete_link(s->list, elem);
         g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));
     }

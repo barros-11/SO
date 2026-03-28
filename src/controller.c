@@ -46,10 +46,15 @@ void controller(int max_commands, int scheduler_algorithm){
 	Scheduler* scheduler = initialize_scheduler(scheduler_algorithm); 
     int v = mkfifo("tmp/controller_pipe", 0666); 
     if (v == -1){
+        cleanup(scheduler);
+        g_array_free(pids, TRUE);
         perror("Error creating the named pipe\n");
+        return;
     }
     int fd = open("tmp/controller_pipe",  O_RDONLY); 
     if (fd == -1) {
+        cleanup(scheduler);
+        g_array_free(pids, TRUE);
         unlink("tmp/controller_pipe");
         perror("Error opening the controller named pipe");
         return;
@@ -71,12 +76,17 @@ void controller(int max_commands, int scheduler_algorithm){
                     mkfifo("tmp/controller_pipe", 0666);
                     fd = open("tmp/controller_pipe", O_RDONLY);
                     if (fd == -1) {
+                        wait_for_children(pids); 
+                        g_array_free(pids, TRUE);
+                        cleanup(scheduler);
                         perror("Error reopening controller pipe");
                         return;
                     }
                     continue;  
                }
                perror("Error reading from pipe or incomplete protocol message\n");
+               wait_for_children(pids); 
+                g_array_free(pids, TRUE);
                return; 
            }
     
@@ -100,8 +110,10 @@ void controller(int max_commands, int scheduler_algorithm){
                         free(result);
                         _exit(0);
                     }
-                    else 
+                    else if (pid > 0)
                         g_array_append_val(pids, pid);
+                    else
+                        perror("fork failed");
                     break; 
            }
            free(p);
@@ -113,16 +125,18 @@ void controller(int max_commands, int scheduler_algorithm){
 				int command_id = command_get_command_id(cmd);
 				current_commands++;
 				notify_runner(command_id, "GO");
-                insert_command(scheduler, cmd);
+                insert_command(scheduler, cmd); // insert in the list of commands that are currently being executed
 				command_free(cmd);
 			}
 		}
 	}
-    // wait for child process
+    wait_for_children(pids);
+
+    g_array_free(pids, TRUE);
     cleanup(scheduler);
     close(fd);
     unlink("tmp/controller_pipe");
-    notify_runner(terminate_command_id, "ENDED"); // notifys the runner, that sended the finish message, that it will exit 
+    notify_runner(terminate_command_id, "ENDED"); // notifies the runner, that sended the finish message, that it will exit 
 }
 
 int main(int n, char* args[]) { 

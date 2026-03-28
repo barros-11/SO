@@ -1,3 +1,0 @@
-[runner] command 205034 submitted
-[runner] executing command 205034...
-[runner] command 205034 finished
