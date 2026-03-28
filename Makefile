@@ -1,20 +1,20 @@
 CC = gcc
-CFLAGS = -Wall -g -Iinclude
-LDFLAGS =
+
+# Para usar o AddressSanitizer acrescentar no CFLAGS: -fsanitize=address -fno-omit-frame-pointer
+# e no LDFLAGS: -fsanitize=address 
+CFLAGS = -Wall -g -Iinclude -fsanitize=address -fno-omit-frame-pointer
+LDFLAGS =-fsanitize=address 
 
 GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIBS := $(shell pkg-config --libs glib-2.0)
+
 LIBS := $(GLIB_LIBS) -lncursesw
 
-OBJ_CONTROLLER_MAIN = obj/controller.o
-OBJ_RUNNER_MAIN = obj/runner/runner.o
+SRC := $(shell find src/ -name "*.c")
 
-COMMON_OBJS = obj/protocol.o obj/runner/communication.o
+COMMON_SRC := $(filter-out src/controller.c src/runner/runner.c, $(SRC))
 
-CONTROLLER_SPECIFIC_OBJS = obj/scheduler/dispatcher.o
-
-RUNNER_SPECIFIC_OBJS = obj/runner/executor.o
-
+COMMON_OBJ := $(patsubst src/%.c, obj/%.o, $(COMMON_SRC))
 
 all: folders controller runner
 
@@ -23,20 +23,20 @@ controller: bin/controller
 runner: bin/runner
 
 folders:
-	@mkdir -p src include obj/runner obj/scheduler bin tmp
+	@mkdir -p src include obj bin tmp
 
-bin/controller: $(OBJ_CONTROLLER_MAIN) $(COMMON_OBJS) $(CONTROLLER_SPECIFIC_OBJS)
+bin/controller: obj/controller.o $(COMMON_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-bin/runner: $(OBJ_RUNNER_MAIN) $(COMMON_OBJS) $(RUNNER_SPECIFIC_OBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
+bin/runner: obj/runner/runner.o $(COMMON_OBJ)
+	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 obj/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(GLIB_CFLAGS) -c $< -o $@
 
 format:
-	@clang-format --verbose -i $(shell find src/ -name "*.c")
+	@clang-format --verbose -i $(SRC)
 	@printf "\nFormatted all available files.\n"
 
 clean:
