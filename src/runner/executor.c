@@ -83,11 +83,17 @@ static void setup_redirections(char *argv[]) {
  */
 static void run_child_process(char **args, int in_fd, int out_fd, int pipe_to_close) {
     if (in_fd != -1) {
-        dup2(in_fd, STDIN_FILENO);
+        if (dup2(in_fd, STDIN_FILENO) == -1) {
+            perror("[runner] dup2 stdin");
+            _exit(1);
+        }
         close(in_fd);
     }
     if (out_fd != -1) {
-        dup2(out_fd, STDOUT_FILENO);
+        if (dup2(out_fd, STDOUT_FILENO) == -1) {
+            perror("[runner] dup2 stdout");
+            _exit(1);
+        }
         close(out_fd);
     }
     if (pipe_to_close != -1) {

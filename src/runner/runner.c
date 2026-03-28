@@ -19,7 +19,7 @@
  * @brief Imprime uma mensagem no terminal com a etiqueta padrão [runner].
  * * @param message A mensagem a ser exibida.
  */
-void print_runner_msg(const char *message) {
+void print_runner_msg(char *message) {
     char buffer[256];
     int len = snprintf(buffer, sizeof(buffer), "[runner] %s\n", message);
     if (len > 0) {

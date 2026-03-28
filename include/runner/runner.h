@@ -13,6 +13,6 @@
  * problemas de intercalação de texto.
  * * @param message A string com a mensagem a ser exibida.
  */
-void print_runner_msg(const char *message);
+void print_runner_msg(char *message);
 
 #endif /* RUNNER_RUNNER_H */

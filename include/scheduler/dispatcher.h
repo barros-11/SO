@@ -1,6 +1,8 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
+#include "command.h"
+
 typedef struct scheduler Scheduler;
 
 /** 
@@ -17,14 +19,15 @@ Scheduler* initialize_scheduler(int scheduler_algorithm);
  * @param created_timestamp The timestamp when the command was created.
  * @param command_id The ID of the command to be added.
  */
-int addCommand(Scheduler *s, int user_id, double created_timestamp);
+int add_command(Scheduler *s, int user_id, double created_timestamp, int command_id);
 
 /**
  * @brief Retrieves the next command to be executed based on the scheduling algorithm.
  * @param s A pointer to the Scheduler instance.
- * @return The ID of the next command to be executed.
+ * @return A pointer to the Command structure containing command_id and user_id.
+ *         The caller is responsible for freeing this memory.
  */
-int getNext(Scheduler *s);
+Command *get_next(Scheduler *s);
 
 /** 
  * @brief Cleans up the scheduler's data and resources.
@@ -44,7 +47,7 @@ void set_add_command_function(Scheduler *s, void (*addCommand)(int user_id, doub
  * @param s A pointer to the Scheduler instance.
  * @param getNext A function pointer to the specific implementation.
  */
-void set_get_next_function(Scheduler *s, int (*getNext)(void *data));
+void set_get_next_function(Scheduler *s, Command *(*getNext)(void *data));
 
 /**
  * @brief Sets the specific cleanup function for the active scheduling algorithm.
@@ -74,6 +77,35 @@ int has_commands(Scheduler *s);
  * @param s Um ponteiro para a instância do Scheduler.
  * @param has_commands Um ponteiro de função para a implementação específica do algoritmo.
  */
-void set_has_commands(Scheduler *s, int (*has_commands)(void *data));
+void set_has_commands_function(Scheduler *s, int (*has_commands)(void *data));
+
+/**
+ * @brief Lista todos os comandos no escalonador em formato string.
+ * @param s Um ponteiro para a instância do Scheduler.
+ * @return Uma string formatada com a lista de todos os comandos.
+ *         O caller é responsável por fazer free() desta string.
+ */
+char *list_commands(Scheduler *s);
+
+/**
+ * @brief Define a função específica do algoritmo ativo para listar os comandos.
+ * @param s Um ponteiro para a instância do Scheduler.
+ * @param listCommands Um ponteiro de função para a implementação específica do algoritmo.
+ */
+void set_list_commands_function(Scheduler *s, char *(*listCommands)(void *data));
+
+/**
+ * @brief Remove um comando específico da lista de comandos em execução.
+ * @param s Um ponteiro para a instância do Scheduler.
+ * @param command_id O ID do comando a remover.
+ */
+void remove_command(Scheduler *s, int command_id);
+
+/**
+ * @brief Insere um comando na lista de comandos em execução.
+ * @param s Um ponteiro para a instância do Scheduler.
+ * @param cmd_info Um ponteiro para a estrutura Command a ser inserida.
+ */
+void insert_command(Scheduler *s, Command *cmd_info);
 
 #endif // DISPATCHER_H
