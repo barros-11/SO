@@ -36,7 +36,7 @@ void wait_for_children(GArray *pids) {
 }
 
 void controller(int max_commands, int scheduler_algorithm) {
-  int terminate_command_id;
+  int terminate_command_id = -1;
 
   unlink("tmp/controller_pipe"); // clean from other executions
 
@@ -138,9 +138,10 @@ void controller(int max_commands, int scheduler_algorithm) {
   cleanup(scheduler);
   close(fd);
   unlink("tmp/controller_pipe");
-  notify_runner(terminate_command_id,
-                "ENDED"); // notifies the runner, that sended the finish
-                          // message, that it will exit
+  if (terminate_command_id != -1)
+    notify_runner(terminate_command_id,
+                  "ENDED"); // notifies the runner, that sent the finish
+                            // message, that it will exit
 }
 
 int main(int n, char *args[]) {
