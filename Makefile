@@ -1,7 +1,9 @@
 CC = gcc
 
-CFLAGS = -Wall -g -Iinclude
-LDFLAGS =
+# Para usar o AddressSanitizer acrescentar no CFLAGS: -fsanitize=address -fno-omit-frame-pointer
+# e no LDFLAGS: -fsanitize=address 
+CFLAGS = -Wall -g -Iinclude -fsanitize=address -fno-omit-frame-pointer
+LDFLAGS =-fsanitize=address 
 
 GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0)
 GLIB_LIBS := $(shell pkg-config --libs glib-2.0)
@@ -10,6 +12,9 @@ LIBS := $(GLIB_LIBS) -lncursesw
 
 SRC := $(shell find src/ -name "*.c")
 
+COMMON_SRC := $(filter-out src/controller.c src/runner/runner.c, $(SRC))
+
+COMMON_OBJ := $(patsubst src/%.c, obj/%.o, $(COMMON_SRC))
 
 all: folders controller runner
 
@@ -26,13 +31,14 @@ runner: bin/runner
 folders:
 	@mkdir -p src include obj bin tmp
 
-bin/controller: obj/controller.o
+bin/controller: obj/controller.o $(COMMON_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-bin/runner: obj/runner.o
+bin/runner: obj/runner/runner.o $(COMMON_OBJ)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 obj/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(GLIB_CFLAGS) -c $< -o $@
 
 format:
@@ -40,4 +46,4 @@ format:
 	@printf "\nFormatted all available files.\n"
 
 clean:
-	rm -f obj/* tmp/* bin/*
+	rm -rf obj/* tmp/* bin/*
