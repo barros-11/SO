@@ -3,10 +3,10 @@
 #include <sys/types.h>
 
 struct protocol {
-    Type status; 
-    int user_id;
-    int pid;  
-    long created_timestamps;  
+  Type status;
+  int user_id;
+  int pid;
+  long created_timestamps;
 };
 
 Type getType(Protocol *p) { return p->status; }
@@ -15,9 +15,7 @@ void setType(Type t, Protocol *p) { p->status = t; }
 
 void setPid(int pid, Protocol *p) { p->pid = pid; }
 
-int getPid(Protocol *p){
-    return p->pid; 
-}
+int getPid(Protocol *p) { return p->pid; }
 
 void setUserId(int ui, Protocol *p) { p->user_id = ui; }
 

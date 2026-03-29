@@ -1,5 +1,6 @@
 #include "scheduler/round_robin.h"
 #include "scheduler/dispatcher.h"
+#include <string.h>
 
 struct round_robin {
   GSList *current_user;
@@ -8,6 +9,7 @@ struct round_robin {
 };
 
 struct job {
+  int user_id;
   int command_id;
   double created_ts;
 };
@@ -33,16 +35,27 @@ static void free_job_queue(gpointer value) {
   g_queue_free_full((GQueue *)value, g_free);
 }
 
-static void add_job(GQueue *jobs_queue, int command_id, double created_at) {
+static void add_job(GQueue *jobs_queue, int user_id, int command_id,
+                    double created_at) {
 
   if (jobs_queue == NULL)
     return;
 
   Job *job = g_malloc(sizeof(Job));
+  job->user_id = user_id;
   job->command_id = command_id;
   job->created_ts = created_at;
 
   g_queue_push_tail(jobs_queue, job);
+}
+
+void initialize_scheduler_rr(Scheduler *s) {
+  set_add_command_function(s, add_command_rr);
+  set_get_next_function(s, get_next_rr);
+  set_cleanup_function(s, cleanup_rr);
+  set_has_commands_function(s, has_commands_rr);
+  set_list_commands_function(s, list_commands_rr);
+  set_data(s, initialize_data_rr());
 }
 
 RoundRobin *initialize_data_rr() {
@@ -77,6 +90,7 @@ void add_command_rr(int user_id, double created_at, int command_id,
   if (!user_jobs_queue) {
 
     Job *job = g_malloc(sizeof(Job));
+    job->user_id = user_id;
     job->command_id = command_id;
     job->created_ts = created_at;
 
@@ -87,14 +101,14 @@ void add_command_rr(int user_id, double created_at, int command_id,
                         jobs_queue);
 
   } else
-    add_job(user_jobs_queue, command_id, created_at);
+    add_job(user_jobs_queue, user_id, command_id, created_at);
 }
 
-int get_next_rr(void *data) {
+Command *get_next_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   if (round_robin == NULL || round_robin->active_users == NULL)
-    return -1;
+    return NULL;
 
   if (round_robin->current_user == NULL)
     round_robin->current_user = round_robin->active_users;
@@ -105,10 +119,11 @@ int get_next_rr(void *data) {
       g_hash_table_lookup(round_robin->users_jobs, GINT_TO_POINTER(user_id));
 
   if (jobs_queue == NULL || g_queue_is_empty(jobs_queue))
-    return -1;
+    return NULL;
 
   Job *job = g_queue_pop_head(jobs_queue);
   int command_id = job->command_id;
+  Command *next_command = command_create(user_id, command_id);
   g_free(job);
 
   GSList *next_user_node = served_user_node->next ? served_user_node->next
@@ -130,8 +145,16 @@ int get_next_rr(void *data) {
     round_robin->current_user = next_user_node;
   }
 
-  return command_id;
+  return next_command;
 }
+
+
+int has_commands_rr(void *data) {
+  RoundRobin *round_robin = (RoundRobin *)data;
+
+  return round_robin != NULL && round_robin->active_users != NULL;
+}
+
 
 void cleanup_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
@@ -144,58 +167,33 @@ void cleanup_rr(void *data) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-// Testing functions
-
-int rr_test_active_users_count(void *data) {
+char *list_commands_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
+  GString *string = g_string_new(NULL);
+  g_string_append(string, "Scheduled\n");
 
-  if (round_robin == NULL)
-    return 0;
+  if (!round_robin->active_users) {
+    g_string_append(string, "No commands scheduled\n");
+  } else {
+    for (GSList *user_node = round_robin->active_users; user_node != NULL;
+         user_node = user_node->next) {
+      int user_id = GPOINTER_TO_INT(user_node->data);
+      GQueue *jobs_queue = g_hash_table_lookup(round_robin->users_jobs,
+                                               GINT_TO_POINTER(user_id));
 
-  return g_slist_length(round_robin->active_users);
-}
+      if (jobs_queue == NULL)
+        continue;
 
-int rr_test_is_user_active(int user_id, void *data) {
-  RoundRobin *round_robin = (RoundRobin *)data;
+      for (GList *job_node = jobs_queue->head; job_node != NULL;
+           job_node = job_node->next) {
+        Job *job = (Job *)job_node->data;
+        g_string_append_printf(string, "user-id %d - command-id %d\n",
+                               job->user_id, job->command_id);
+      }
+    }
+  }
 
-  if (round_robin == NULL)
-    return 0;
-
-  return g_slist_find(round_robin->active_users, GINT_TO_POINTER(user_id)) !=
-         NULL;
-}
-
-int rr_test_jobs_count(int user_id, void *data) {
-  RoundRobin *round_robin = (RoundRobin *)data;
-
-  if (round_robin == NULL)
-    return 0;
-
-  GQueue *user_jobs_queue =
-      g_hash_table_lookup(round_robin->users_jobs, GINT_TO_POINTER(user_id));
-
-  if (user_jobs_queue == NULL)
-    return 0;
-
-  return (int)g_queue_get_length(user_jobs_queue);
-}
-
-int rr_test_current_user(void *data) {
-  RoundRobin *round_robin = (RoundRobin *)data;
-
-  if (round_robin == NULL || round_robin->current_user == NULL)
-    return -1;
-
-  return GPOINTER_TO_INT(round_robin->current_user->data);
+  char *final_string = strdup(string->str);
+  g_string_free(string, TRUE);
+  return final_string;
 }
