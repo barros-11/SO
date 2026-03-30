@@ -1,4 +1,4 @@
-#include "command.h"
+#include "scheduler/command.h"
 #include <stdlib.h>
 
 Command *command_create(int user_id, int command_id) {

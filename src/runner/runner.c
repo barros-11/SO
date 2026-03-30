@@ -6,7 +6,7 @@
  */
 
 #include "runner/runner.h"
-#include "protocol.h"
+#include "request.h"
 #include "runner/communication.h"
 #include "runner/executor.h"
 #include <stdio.h>
@@ -42,29 +42,29 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  Protocol *p = malloc(getProtocolSize());
+  Request *r = malloc(get_request_size());
   int my_pid = getpid();
   char msg[128];
 
-  setPid(my_pid, p);
+  set_command_id(my_pid, r);
 
   struct timeval tv;
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-  setCreatedTimestamps(timestamp, p);
+  set_created_timestamps(timestamp, r);
 
   // --- MODO DE EXECUÇÃO (-e) ---
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
-    setType(EXECUTE, p);
-    setUserId(atoi(argv[2]), p);
+    set_status(EXECUTE, r);
+    set_user_id(atoi(argv[2]), r);
 
     create_response_pipe(my_pid);
 
-    if (send_to_controller(p) != 0) {
+    if (send_to_controller(r) != 0) {
       print_runner_msg(
           "Erro: o controller não está a correr ou o pipe principal falhou");
       cleanup_pipe(my_pid);
-      free(p);
+      free(r);
       return 1;
     }
 
@@ -78,26 +78,26 @@ int main(int argc, char *argv[]) {
 
     execute_command(argc - 3, &argv[3]);
 
-    setType(TERMINATED, p);
-    send_to_controller(p);
+    set_status(TERMINATED, r);
+    send_to_controller(r);
 
     snprintf(msg, sizeof(msg), "command %d finished", my_pid);
     print_runner_msg(msg);
   }
   // --- MODO DE CONSULTA (-c) ---
   else if (strcmp(argv[1], "-c") == 0) {
-    setType(LIST, p);
+    set_status(LIST, r);
 
     if (create_response_pipe(my_pid) != 0) {
       perror("[runner] Erro ao criar pipe de resposta");
-      free(p);
+      free(r);
       return 1;
     }
 
-    if (send_to_controller(p) != 0) {
+    if (send_to_controller(r) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
-      free(p);
+      free(r);
       return 1;
     }
 
@@ -105,18 +105,18 @@ int main(int argc, char *argv[]) {
   }
   // --- MODO DE ENCERRAMENTO (-s) ---
   else if (strcmp(argv[1], "-s") == 0) {
-    setType(END, p);
+    set_status(END, r);
 
     if (create_response_pipe(my_pid) != 0) {
       perror("[runner] Erro ao criar pipe de resposta");
-      free(p);
+      free(r);
       return 1;
     }
 
-    if (send_to_controller(p) != 0) {
+    if (send_to_controller(r) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
-      free(p);
+      free(r);
       return 1;
     }
 
@@ -128,6 +128,6 @@ int main(int argc, char *argv[]) {
   }
 
   cleanup_pipe(my_pid);
-  free(p);
+  free(r);
   return 0;
 }

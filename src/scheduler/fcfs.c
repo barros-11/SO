@@ -1,14 +1,9 @@
 #include "scheduler/fcfs.h"
-#include "command.h"
+#include "scheduler/command.h"
 #include "scheduler/dispatcher.h"
 
 #include <glib.h>
 #include <stdlib.h>
-
-typedef struct {
-  int user_id;
-  int command_id;
-} CommandInfo;
 
 void *initialize_data_fcfs() { return ((void *)g_queue_new()); }
 
@@ -16,31 +11,39 @@ void add_command_fcfs(int user_id, double created_at, int command_id,
                       void *data) {
   (void)created_at;
   GQueue *q = (GQueue *)data;
-  CommandInfo *cmd_info = malloc(sizeof(CommandInfo));
-  cmd_info->user_id = user_id;
-  cmd_info->command_id = command_id;
-  g_queue_push_tail(q, cmd_info);
+  Command *cmd = command_create(user_id, command_id);
+  if (cmd != NULL)
+    g_queue_push_tail(q, cmd);
 }
 
-Command *get_next_fcfs(void *data) {
+Request *get_next_fcfs(void *data) {
   GQueue *q = (GQueue *)data;
-  CommandInfo *cmd_info = (CommandInfo *)g_queue_pop_head(q);
+  Command *cmd_info = (Command *)g_queue_pop_head(q);
   if (cmd_info == NULL)
     return NULL;
 
-  // Devolve um Command com ambos os campos
-  Command *result = command_create(cmd_info->user_id, cmd_info->command_id);
-  free(cmd_info);
+  Request *result = malloc(get_request_size());
+  if (result != NULL) {
+    set_user_id(command_get_user_id(cmd_info), result);
+    set_command_id(command_get_command_id(cmd_info), result);
+    set_created_timestamps(0, result);
+    set_duration(result, 0);
+    set_status(EXECUTE, result);
+  }
+
+  command_free(cmd_info);
   return result;
 }
 
-void cleanup_fcfs(void *data) { g_queue_free_full((GQueue *)data, free); }
+void cleanup_fcfs(void *data) {
+  g_queue_free_full((GQueue *)data, (GDestroyNotify)command_free);
+}
 
 void append_to_string_fcfs(gpointer data, gpointer user_data) {
   GString *string = (GString *)user_data;
-  CommandInfo *cmd = (CommandInfo *)data;
-  g_string_append_printf(string, "user-id %d - command-id %d\n", cmd->user_id,
-                         cmd->command_id);
+  Command *cmd = (Command *)data;
+  g_string_append_printf(string, "user-id %d - command-id %d\n",
+                         command_get_user_id(cmd), command_get_command_id(cmd));
 }
 
 char *list_commands_fcfs(void *data) {

@@ -1,4 +1,5 @@
 #include "scheduler/round_robin.h"
+#include "scheduler/command.h"
 #include "scheduler/dispatcher.h"
 #include <string.h>
 
@@ -6,6 +7,7 @@ struct round_robin {
   GSList *current_user;
   GSList *active_users;
   GHashTable *users_jobs;
+  int last_served_user;
 };
 
 struct job {
@@ -62,6 +64,7 @@ RoundRobin *initialize_data_rr() {
   RoundRobin *round_robin = g_malloc(sizeof(struct round_robin));
   round_robin->current_user = NULL;
   round_robin->active_users = NULL;
+  round_robin->last_served_user = -1;
   round_robin->users_jobs = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                                   NULL, free_job_queue);
 
@@ -104,7 +107,7 @@ void add_command_rr(int user_id, double created_at, int command_id,
     add_job(user_jobs_queue, user_id, command_id, created_at);
 }
 
-Command *get_next_rr(void *data) {
+Request *get_next_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   if (round_robin == NULL || round_robin->active_users == NULL)
@@ -112,6 +115,14 @@ Command *get_next_rr(void *data) {
 
   if (round_robin->current_user == NULL)
     round_robin->current_user = round_robin->active_users;
+
+  if (round_robin->active_users->next != NULL &&
+      GPOINTER_TO_INT(round_robin->current_user->data) ==
+          round_robin->last_served_user) {
+    round_robin->current_user = round_robin->current_user->next
+                                    ? round_robin->current_user->next
+                                    : round_robin->active_users;
+  }
 
   GSList *served_user_node = round_robin->current_user;
   int user_id = GPOINTER_TO_INT(served_user_node->data);
@@ -122,8 +133,22 @@ Command *get_next_rr(void *data) {
     return NULL;
 
   Job *job = g_queue_pop_head(jobs_queue);
+  round_robin->last_served_user = user_id;
   int command_id = job->command_id;
   Command *next_command = command_create(user_id, command_id);
+  Request *result = NULL;
+
+  if (next_command != NULL) {
+    result = malloc(get_request_size());
+    if (result != NULL) {
+      set_user_id(command_get_user_id(next_command), result);
+      set_command_id(command_get_command_id(next_command), result);
+      set_created_timestamps((long)job->created_ts, result);
+      set_duration(result, 0);
+      set_status(EXECUTE, result);
+    }
+    command_free(next_command);
+  }
   g_free(job);
 
   GSList *next_user_node = served_user_node->next ? served_user_node->next
@@ -145,16 +170,14 @@ Command *get_next_rr(void *data) {
     round_robin->current_user = next_user_node;
   }
 
-  return next_command;
+  return result;
 }
-
 
 int has_commands_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   return round_robin != NULL && round_robin->active_users != NULL;
 }
-
 
 void cleanup_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
@@ -166,7 +189,6 @@ void cleanup_rr(void *data) {
   g_free(round_robin);
 }
 
-
 char *list_commands_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
   GString *string = g_string_new(NULL);
@@ -175,21 +197,14 @@ char *list_commands_rr(void *data) {
   if (!round_robin->active_users) {
     g_string_append(string, "No commands scheduled\n");
   } else {
-    for (GSList *user_node = round_robin->active_users; user_node != NULL;
-         user_node = user_node->next) {
-      int user_id = GPOINTER_TO_INT(user_node->data);
-      GQueue *jobs_queue = g_hash_table_lookup(round_robin->users_jobs,
-                                               GINT_TO_POINTER(user_id));
+    while (has_commands_rr(data)) {
+      Request *next = get_next_rr(data);
+      if (next == NULL)
+        break;
 
-      if (jobs_queue == NULL)
-        continue;
-
-      for (GList *job_node = jobs_queue->head; job_node != NULL;
-           job_node = job_node->next) {
-        Job *job = (Job *)job_node->data;
-        g_string_append_printf(string, "user-id %d - command-id %d\n",
-                               job->user_id, job->command_id);
-      }
+      g_string_append_printf(string, "user-id %d - command-id %d\n",
+                             get_user_id(next), get_command_id(next));
+      free(next);
     }
   }
 

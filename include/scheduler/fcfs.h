@@ -1,8 +1,8 @@
 #ifndef FCFS_H
 #define FCFS_H
 
+#include "request.h"
 #include "scheduler/dispatcher.h"
-#include "command.h"
 
 /**
  * @brief Inicializa a estrutura de dados (GQueue) para o escalonamento FCFS.
@@ -17,15 +17,17 @@ void *initialize_data_fcfs(void);
  * @param command_id ID único do comando gerado pelo Dispatcher.
  * @param data Ponteiro para a estrutura de dados do algoritmo (a GQueue).
  */
-void add_command_fcfs(int user_id, double created_at, int command_id, void *data);
+void add_command_fcfs(int user_id, double created_at, int command_id,
+                      void *data);
 
 /**
- * @brief Retira e devolve o próximo comando a ser executado (o mais antigo da fila).
+ * @brief Retira e devolve o próximo comando a ser executado (o mais antigo da
+ * fila).
  * @param data Ponteiro para a estrutura de dados do algoritmo (a GQueue).
- * @return Um ponteiro para a estrutura Command com os dados do próximo comando.
+ * @return Um ponteiro para a estrutura Request com os dados do próximo comando.
  *         O caller é responsável por fazer free() dessa memória.
  */
-Command *get_next_fcfs(void *data);
+Request *get_next_fcfs(void *data);
 
 /**
  * @brief Liberta toda a memória alocada pela fila do FCFS.
@@ -49,7 +51,8 @@ int has_commands_fcfs(void *data);
 char *list_commands_fcfs(void *data);
 
 /**
- * @brief Injeta as funções do FCFS e a estrutura de dados no Scheduler genérico.
+ * @brief Injeta as funções do FCFS e a estrutura de dados no Scheduler
+ * genérico.
  * @param s Ponteiro para a instância do Scheduler a ser configurada.
  */
 void initialize_scheduler_fcfs(Scheduler *s);

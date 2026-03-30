@@ -5,7 +5,7 @@
  */
 
 #include "runner/communication.h"
-#include "protocol.h"
+#include "request.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,15 +17,15 @@
 
 /**
  * @brief Envia uma mensagem de protocolo para o pipe principal do Controller.
- * * @param p Ponteiro para a estrutura Protocol a ser enviada.
+ * * @param p Ponteiro para a estrutura Request a ser enviada.
  * @return 0 em caso de sucesso, -1 se o pipe não puder ser aberto.
  */
-int send_to_controller(Protocol *p) {
+int send_to_controller(Request *r) {
   int fd = open(SERVER_FIFO, O_WRONLY);
   if (fd == -1)
     return -1;
 
-  write(fd, p, getProtocolSize());
+  write(fd, r, get_request_size());
   close(fd);
   return 0;
 }

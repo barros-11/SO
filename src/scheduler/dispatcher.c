@@ -1,6 +1,6 @@
 #include "scheduler/dispatcher.h"
-#include "command.h"
-#include "protocol.h"
+#include "request.h"
+#include "scheduler/command.h"
 #include "scheduler/fcfs.h"
 #include "scheduler/round_robin.h"
 #include "stdio.h"
@@ -12,7 +12,7 @@
 struct scheduler {
   void (*addCommand)(int user_id, double created_timestamps, int command_id,
                      void *data); // returns the command_id
-  Command *(*getNext)(void *data);
+  Request *(*getNext)(void *data);
   void (*cleanup)(void *data);
   int (*has_commands)(void *data);
   char *(*list_commands)(void *data);
@@ -33,9 +33,11 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
   switch (scheduler_algorithm) {
   case 0:
     initialize_scheduler_fcfs(s);
+    printf("[Scheduler] First Come First Served selected!");
     break;
   case 1: // ...
     initialize_scheduler_rr(s);
+    printf("[Scheduler] Round Robin selected!");
     break;
   }
   return s;
@@ -47,7 +49,7 @@ int add_command(Scheduler *s, int user_id, double created_timestamp,
   return s->total_commands++;
 }
 
-Command *get_next(Scheduler *s) { return s->getNext(s->data); }
+Request *get_next(Scheduler *s) { return s->getNext(s->data); }
 
 int has_commands(Scheduler *s) { return s->has_commands(s->data); }
 
@@ -58,7 +60,7 @@ void set_add_command_function(Scheduler *s,
   s->addCommand = addCommand;
 }
 
-void set_get_next_function(Scheduler *s, Command *(*getNext)(void *data)) {
+void set_get_next_function(Scheduler *s, Request *(*getNext)(void *data)) {
   s->getNext = getNext;
 }
 
@@ -86,9 +88,9 @@ void cleanup(Scheduler *s) {
 
 void append_to_string(gpointer data, gpointer user_data) {
   GString *string = (GString *)user_data;
-  Command *cmd = (Command *)data;
+  Request *cmd = (Request *)data;
   g_string_append_printf(string, "user-id %d - command-id %d\n",
-                         command_get_user_id(cmd), command_get_command_id(cmd));
+                         get_user_id(cmd), get_command_id(cmd));
 }
 
 char *list_commands(Scheduler *s) {
@@ -119,11 +121,18 @@ void remove_command(Scheduler *s, int command_id) {
   }
 }
 
-void insert_command(Scheduler *s, Command *cmd_info) {
-  Command *cmd = command_create(command_get_user_id(cmd_info),
-                                command_get_command_id(cmd_info));
+void insert_command(Scheduler *s, Request *cmd_info) {
+  Request *cmd = malloc(get_request_size());
+  if (cmd == NULL)
+    return;
+
+  set_user_id(get_user_id(cmd_info), cmd);
+  set_command_id(get_command_id(cmd_info), cmd);
+  set_created_timestamps(get_created_timestamps(cmd_info), cmd);
+  set_duration(cmd, get_duration(cmd_info));
+  set_status(get_status(cmd_info), cmd);
+
   g_queue_push_tail(s->list, cmd);
-  g_hash_table_insert(s->table,
-                      GINT_TO_POINTER(command_get_command_id(cmd_info)),
+  g_hash_table_insert(s->table, GINT_TO_POINTER(get_command_id(cmd_info)),
                       s->list->tail);
 }

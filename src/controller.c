@@ -1,5 +1,4 @@
-#include "command.h"
-#include "protocol.h"
+#include "request.h"
 #include "scheduler/dispatcher.h"
 #include <fcntl.h>
 #include <glib.h>
@@ -62,15 +61,15 @@ void controller(int max_commands, int scheduler_algorithm) {
   int current_commands = 0; // number of commands being run
   while (current_commands || !acabou) {
     // if we didnt end and (we dont have commands to execute or we cant put any
-    // more commands to execute at the same time) -> we wait for a new protocol
+    // more commands to execute at the same time) -> we wait for a new request
     if (!acabou &&
         (!has_commands(scheduler) || current_commands == max_commands)) {
-      Protocol *p = malloc(getProtocolSize());
-      ssize_t size = read(fd, p, getProtocolSize());
-      printf("Protocol size is: %d\n", getProtocolSize());
+      Request *r = malloc(get_request_size());
+      ssize_t size = read(fd, r, get_request_size());
+      printf("Request size is: %d\n", get_request_size());
       printf("size is: %ld\n", size);
-      if (size != getProtocolSize()) {
-        free(p);
+      if (size != get_request_size()) {
+        free(r);
         close(fd);
         unlink("tmp/controller_pipe");
         if (size == 0) { // so it wait for new runner to be created
@@ -85,30 +84,30 @@ void controller(int max_commands, int scheduler_algorithm) {
           }
           continue;
         }
-        perror("Error reading from pipe or incomplete protocol message\n");
+        perror("Error reading from pipe or incomplete request message\n");
         wait_for_children(pids);
         g_array_free(pids, TRUE);
         return;
       }
 
-      switch (getType(p)) {
+      switch (get_status(r)) {
       case END:
         acabou = 1;
-        terminate_command_id = getPid(p);
+        terminate_command_id = get_command_id(r);
         break;
       case TERMINATED:
-        remove_command(scheduler, getPid(p));
+        remove_command(scheduler, get_command_id(r));
         current_commands--;
         break;
       case EXECUTE:
-        add_command(scheduler, getUserId(p), getCreatedTimestamps(p),
-                    getPid(p));
+        add_command(scheduler, get_user_id(r), get_created_timestamps(r),
+                    get_command_id(r));
         break;
       case LIST:
         int pid = fork();
         if (pid == 0) {
           char *result = list_commands(scheduler);
-          notify_runner(getPid(p), result);
+          notify_runner(get_command_id(r), result);
           free(result);
           _exit(0);
         } else if (pid > 0)
@@ -117,18 +116,18 @@ void controller(int max_commands, int scheduler_algorithm) {
           perror("fork failed");
         break;
       }
-      free(p);
+      free(r);
     }
 
     if (current_commands < max_commands && has_commands(scheduler)) {
-      Command *cmd = get_next(scheduler);
+      Request *cmd = get_next(scheduler);
       if (cmd != NULL) {
-        int command_id = command_get_command_id(cmd);
+        int command_id = get_command_id(cmd);
         current_commands++;
         notify_runner(command_id, "GO");
         insert_command(scheduler, cmd); // insert in the list of commands that
                                         // are currently being executed
-        command_free(cmd);
+        free(cmd);
       }
     }
   }
