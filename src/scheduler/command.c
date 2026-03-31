@@ -1,6 +1,11 @@
 #include "scheduler/command.h"
 #include <stdlib.h>
 
+struct command {
+  int user_id;
+  int command_id;
+};
+
 Command *command_create(int user_id, int command_id) {
   Command *cmd = malloc(sizeof(Command));
   if (cmd != NULL) {
