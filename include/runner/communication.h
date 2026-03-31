@@ -1,9 +1,9 @@
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
-#include "protocol.h"
+#include "request.h"
 
-int send_to_controller(Protocol *p);
+int send_to_controller(Request *r);
 
 int create_response_pipe(int pid);
 
