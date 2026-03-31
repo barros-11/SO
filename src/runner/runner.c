@@ -52,12 +52,12 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
   set_created_timestamps(timestamp, r);
+  set_duration(r, 0); 
 
   // --- MODO DE EXECUÇÃO (-e) ---
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
     set_status(EXECUTE, r);
     set_user_id(atoi(argv[2]), r);
-
     create_response_pipe(my_pid);
 
     if (send_to_controller(r) != 0) {
@@ -71,14 +71,29 @@ int main(int argc, char *argv[]) {
     snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
     print_runner_msg(msg);
 
-    wait_for_go(my_pid);
+    if (wait_for_go(my_pid) == -1){
+      print_runner_msg("Controller não aceita mais comandos");
+      return 1; 
+    }
 
     snprintf(msg, sizeof(msg), "executing command %d...", my_pid);
     print_runner_msg(msg);
 
+    struct timeval tv_start;
+    gettimeofday(&tv_start, NULL);
+    long start_time = tv_start.tv_sec * 1000 + tv_start.tv_usec / 1000;
+
     execute_command(argc - 3, &argv[3]);
 
+    struct timeval tv_end;
+    gettimeofday(&tv_end, NULL);
+    long end_time = tv_end.tv_sec * 1000 + tv_end.tv_usec / 1000;
+    long duration_execution = end_time - start_time;
+    long duration_since_creation = end_time - get_created_timestamps(r);
+
     set_status(TERMINATED, r);
+    set_created_timestamps(duration_since_creation, r);
+    set_duration(r, duration_execution);
     send_to_controller(r);
 
     snprintf(msg, sizeof(msg), "command %d finished", my_pid);
