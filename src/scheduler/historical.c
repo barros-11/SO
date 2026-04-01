@@ -98,3 +98,19 @@ void free_history(Historical *h) {
   }
   free(h);
 }
+
+int get_user_number_command(Historical *h, int  user_id){
+  GHashTable * table = h->historical; 
+  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id)); 
+  if (p == NULL) return 0;
+  UserStats * us = (UserStats *)p; 
+  return us->commands_run; 
+}
+
+long get_user_total_execution_time(Historical *h, int  user_id){
+  GHashTable * table = h->historical; 
+  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id)); 
+  if (p==NULL) return 0;
+  UserStats * us = (UserStats *)p; 
+  return us->total_execution_time; 
+}

@@ -4,6 +4,7 @@
 #include "scheduler/fcfs.h"
 #include "scheduler/round_robin.h"
 #include "scheduler/historical.h"
+#include "scheduler/least_commands_first.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include <fcntl.h>
@@ -49,9 +50,13 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     initialize_scheduler_fcfs(s);
     printf("[Scheduler] First Come First Served selected!\n");
     break;
-  case 1: // ...
+  case 1: 
     initialize_scheduler_rr(s);
     printf("[Scheduler] Round Robin selected!\n");
+    break;
+  case 2:
+    initialize_scheduler_lcf(s);
+    printf("[Scheduler] Least Commands First selected!\n");
     break;
   }
   return s;
@@ -177,4 +182,6 @@ void insert_command(Scheduler *s, Request *cmd_info) {
                       s->list->tail);
 }
 
-
+Historical* get_users_history(Scheduler *s){
+  return s->users_history; 
+}

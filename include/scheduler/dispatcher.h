@@ -2,6 +2,7 @@
 #define DISPATCHER_H
 
 #include "request.h"
+#include "scheduler/historical.h"
 
 typedef struct scheduler Scheduler;
 
@@ -125,5 +126,12 @@ void remove_command(Scheduler *s, int command_id, Request *r);
  * @param cmd_info Um ponteiro para a estrutura Request a ser inserida.
  */
 void insert_command(Scheduler *s, Request *cmd_info);
+
+/**
+ * @brief Retrieves the historical records of users from the scheduler.
+ * @param s A pointer to the Scheduler instance.
+ * @return A pointer to the Historical structure containing user statistics.
+ */
+Historical* get_users_history(Scheduler *s);
 
 #endif // DISPATCHER_H
