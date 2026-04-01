@@ -56,9 +56,11 @@ int wait_for_go(int pid) {
   if (fd == -1)
     return -1;
 
-  char buffer[10];
+  char buffer[64];
   int bytes = read(fd, buffer, sizeof(buffer));
   close(fd);
+  if (strcmp(buffer, "DONT EXECUTE") == 0)
+    return -1; 
   return bytes;
 }
 
