@@ -45,4 +45,22 @@ void update_user_stats(Historical *h, int user_id, long duration);
  */
 void free_history(Historical *h);
 
+/**
+ * @brief Retrieves the number of commands executed by a specific user.
+ * 
+ * @param h Pointer to the Historical structure.
+ * @param user_id The identifier of the user.
+ * @return int The total number of commands executed by the user.
+ */
+int get_user_number_command(Historical *h, int  user_id);
+
+/**
+ * @brief Retrieves the total execution time for a specific user's commands.
+ * 
+ * @param h Pointer to the Historical structure.
+ * @param user_id The identifier of the user.
+ * @return long The total execution time in milliseconds for all commands executed by the user.
+ */
+long get_user_total_execution_time(Historical *h, int  user_id);
+
 #endif /* HISTORICAL_H */

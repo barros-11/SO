@@ -12,7 +12,6 @@
 void notify_runner(int command_id, char *msg) {
   char path[64];
   snprintf(path, 64, "tmp/runner_%d", command_id);
-  printf("path: %s\n", path);
   int fd = open(path, O_WRONLY);
   if (fd == -1) {
     perror("Error opening runner pipe");
