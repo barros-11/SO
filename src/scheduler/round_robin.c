@@ -3,6 +3,9 @@
 #include "scheduler/dispatcher.h"
 #include <string.h>
 
+typedef struct round_robin RoundRobin;
+typedef struct job Job;
+
 struct round_robin {
   GSList *current_user;
   GSList *active_users;
@@ -51,16 +54,7 @@ static void add_job(GQueue *jobs_queue, int user_id, int command_id,
   g_queue_push_tail(jobs_queue, job);
 }
 
-void initialize_scheduler_rr(Scheduler *s) {
-  set_add_command_function(s, add_command_rr);
-  set_get_next_function(s, get_next_rr);
-  set_cleanup_function(s, cleanup_rr);
-  set_has_commands_function(s, has_commands_rr);
-  set_list_commands_function(s, list_commands_rr);
-  set_data(s, initialize_data_rr());
-}
-
-RoundRobin *initialize_data_rr() {
+static RoundRobin *initialize_data_rr() {
   RoundRobin *round_robin = g_malloc(sizeof(struct round_robin));
   round_robin->current_user = NULL;
   round_robin->active_users = NULL;
@@ -76,8 +70,8 @@ static void free_users_jobs(RoundRobin *round_robin) {
   g_hash_table_destroy(round_robin->users_jobs);
 }
 
-void add_command_rr(int user_id, double created_at, int command_id,
-                    void *data) {
+static void add_command_rr(int user_id, double created_at, int command_id,
+                           void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   if (round_robin == NULL)
@@ -107,7 +101,7 @@ void add_command_rr(int user_id, double created_at, int command_id,
     add_job(user_jobs_queue, user_id, command_id, created_at);
 }
 
-Request *get_next_rr(void *data) {
+static Request *get_next_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   if (round_robin == NULL || round_robin->active_users == NULL)
@@ -173,13 +167,13 @@ Request *get_next_rr(void *data) {
   return result;
 }
 
-int has_commands_rr(void *data) {
+static int has_commands_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   return round_robin != NULL && round_robin->active_users != NULL;
 }
 
-void cleanup_rr(void *data) {
+static void cleanup_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
 
   if (round_robin == NULL)
@@ -189,7 +183,7 @@ void cleanup_rr(void *data) {
   g_free(round_robin);
 }
 
-char *list_commands_rr(void *data) {
+static char *list_commands_rr(void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
   GString *string = g_string_new(NULL);
   g_string_append(string, "Scheduled\n");
@@ -211,4 +205,13 @@ char *list_commands_rr(void *data) {
   char *final_string = strdup(string->str);
   g_string_free(string, TRUE);
   return final_string;
+}
+
+void initialize_scheduler_rr(Scheduler *s) {
+  set_add_command_function(s, add_command_rr);
+  set_get_next_function(s, get_next_rr);
+  set_cleanup_function(s, cleanup_rr);
+  set_has_commands_function(s, has_commands_rr);
+  set_list_commands_function(s, list_commands_rr);
+  set_data(s, initialize_data_rr());
 }

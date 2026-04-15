@@ -61,8 +61,8 @@ static GSequenceIter *find_best_iter_let(LetData *let, GSequence *sequence) {
   return best;
 }
 
-void add_command_let(int user_id, double created_at, int command_id,
-                     void *data) {
+static void add_command_let(int user_id, double created_at, int command_id,
+                            void *data) {
   (void)created_at;
   LetData *let = (LetData *)data;
 
@@ -73,7 +73,7 @@ void add_command_let(int user_id, double created_at, int command_id,
   g_sequence_append(let->sequence, cmd);
 }
 
-Request *get_next_let(void *data) {
+static Request *get_next_let(void *data) {
   LetData *let = (LetData *)data;
 
   if (g_sequence_is_empty(let->sequence))
@@ -100,12 +100,12 @@ Request *get_next_let(void *data) {
   return result;
 }
 
-int has_commands_let(void *data) {
+static int has_commands_let(void *data) {
   LetData *let = (LetData *)data;
   return !g_sequence_is_empty(let->sequence);
 }
 
-void cleanup_let(void *data) {
+static void cleanup_let(void *data) {
   LetData *let = (LetData *)data;
 
   GSequenceIter *iter = g_sequence_get_begin_iter(let->sequence);
@@ -119,7 +119,7 @@ void cleanup_let(void *data) {
   free(let);
 }
 
-char *list_commands_let(void *data) {
+static char *list_commands_let(void *data) {
   LetData *let = (LetData *)data;
   GString *string = g_string_new("Scheduled\n");
 

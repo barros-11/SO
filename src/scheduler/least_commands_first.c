@@ -20,7 +20,8 @@ typedef struct node_data {
 } NodeData;
 
 // Lowest command counter goes first
-gint compare_lcf_nodes(gconstpointer a, gconstpointer b, gpointer user_data) {
+static gint compare_lcf_nodes(gconstpointer a, gconstpointer b,
+                              gpointer user_data) {
   (void)user_data;
   NodeData *node_a = (NodeData *)a;
   NodeData *node_b = (NodeData *)b;
@@ -32,8 +33,8 @@ gint compare_lcf_nodes(gconstpointer a, gconstpointer b, gpointer user_data) {
   return 0;
 }
 
-void add_command_lcf(int user_id, double created_at, int command_id,
-                     void *data) {
+static void add_command_lcf(int user_id, double created_at, int command_id,
+                            void *data) {
   (void)created_at;
   LcfData *lcf = (LcfData *)data;
 
@@ -48,7 +49,7 @@ void add_command_lcf(int user_id, double created_at, int command_id,
   g_sequence_insert_sorted(lcf->sequence, node, compare_lcf_nodes, NULL);
 }
 
-Request *get_next_lcf(void *data) {
+static Request *get_next_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
 
   if (g_sequence_is_empty(lcf->sequence)) {
@@ -76,12 +77,12 @@ Request *get_next_lcf(void *data) {
   return result;
 }
 
-int has_commands_lcf(void *data) {
+static int has_commands_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
   return !g_sequence_is_empty(lcf->sequence);
 }
 
-void cleanup_lcf(void *data) {
+static void cleanup_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
 
   GSequenceIter *iter = g_sequence_get_begin_iter(lcf->sequence);
@@ -96,7 +97,7 @@ void cleanup_lcf(void *data) {
   free(lcf);
 }
 
-char *list_commands_lcf(void *data) {
+static char *list_commands_lcf(void *data) {
   GString *string = g_string_new("Scheduled\n");
 
   if (!has_commands_lcf(data)) {
