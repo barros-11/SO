@@ -132,6 +132,18 @@ void insert_command(Scheduler *s, Request *cmd_info);
  * @param s A pointer to the Scheduler instance.
  * @return A pointer to the Historical structure containing user statistics.
  */
-Historical* get_users_history(Scheduler *s);
+Historical *get_users_history(Scheduler *s);
+
+/**
+ * @brief Returns accumulated active execution time for a user.
+ *
+ * This value is computed from commands currently executing in this controller
+ * session and is intended for transient scheduling decisions.
+ *
+ * @param s A pointer to the Scheduler instance.
+ * @param user_id The identifier of the user.
+ * @return long Total active execution time (ms) for running commands.
+ */
+long get_user_active_execution_time(Scheduler *s, int user_id);
 
 #endif // DISPATCHER_H
