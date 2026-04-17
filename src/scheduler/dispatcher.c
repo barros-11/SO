@@ -2,9 +2,9 @@
 #include "request.h"
 #include "scheduler/command.h"
 #include "scheduler/fcfs.h"
-#include "scheduler/round_robin.h"
 #include "scheduler/historical.h"
 #include "scheduler/least_commands_first.h"
+#include "scheduler/round_robin.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include <fcntl.h>
@@ -23,7 +23,7 @@ struct scheduler {
 
   int fd; // file descriptor for the logs
 
-  Historical* users_history; // hash table that tracks the users history
+  Historical *users_history; // hash table that tracks the users history
 
   // bellow are the data structers to keep track of the commands currenlty being
   // executed
@@ -34,9 +34,9 @@ struct scheduler {
 
 Scheduler *initialize_scheduler(int scheduler_algorithm) {
   Scheduler *s = malloc(sizeof(struct scheduler));
-  int fd = open("logs.txt", O_CREAT | O_APPEND | O_WRONLY, 0666); 
-  if (fd== -1 ){
-    perror("Error opening the file for the logs"); 
+  int fd = open("logs.txt", O_CREAT | O_APPEND | O_WRONLY, 0666);
+  if (fd == -1) {
+    perror("Error opening the file for the logs");
     free(s);
     return NULL;
   }
@@ -50,7 +50,7 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     initialize_scheduler_fcfs(s);
     printf("[Scheduler] First Come First Served selected!\n");
     break;
-  case 1: 
+  case 1:
     initialize_scheduler_rr(s);
     printf("[Scheduler] Round Robin selected!\n");
     break;
@@ -99,7 +99,8 @@ void set_list_commands_function(Scheduler *s,
 }
 
 void cleanup(Scheduler *s) {
-  save_history(s->users_history); // saves the historical data and also frees the structure
+  save_history(s->users_history); // saves the historical data and also frees
+                                  // the structure
   g_hash_table_destroy(s->table);
   g_queue_free_full(s->list, free);
   s->cleanup(s->data);
@@ -126,32 +127,33 @@ char *list_commands(Scheduler *s) {
       s->list_commands(s->data); // the string that comes from the spefic
                                  // algorithm with the order commands
   if (result_to_be_executed != NULL) {
-      g_string_append(result, result_to_be_executed);
-      free(result_to_be_executed);
+    g_string_append(result, result_to_be_executed);
+    free(result_to_be_executed);
   }
   char *final_result = strdup(result->str);
   g_string_free(result, 1); // 1 <=> True,  for freeing the string
   return final_result;
 }
 
-void save_log(Request *r, int fd){
-    if (r == NULL || fd < 0) {
-        return;
-    }
-    char buffer[256]; 
-    
-    int user_id = get_user_id(r);
-    int command_id = get_command_id(r);
-    long duration = get_duration(r);
-    long time_since_creation = get_created_timestamps(r); 
+void save_log(Request *r, int fd) {
+  if (r == NULL || fd < 0) {
+    return;
+  }
+  char buffer[256];
 
-    int len = snprintf(buffer, sizeof(buffer), 
-                       "user-id: %d, command-id: %d, time_since_creation: %ld ms, duration: %ld ms\n", 
-                       user_id, command_id, time_since_creation, duration);
+  int user_id = get_user_id(r);
+  int command_id = get_command_id(r);
+  long duration = get_duration(r);
+  long time_since_creation = get_created_timestamps(r);
 
-    if (len > 0) {
-        write(fd, buffer, len);
-    }
+  int len = snprintf(buffer, sizeof(buffer),
+                     "user-id: %d, command-id: %d, time_since_creation: %ld "
+                     "ms, duration: %ld ms\n",
+                     user_id, command_id, time_since_creation, duration);
+
+  if (len > 0) {
+    write(fd, buffer, len);
+  }
 }
 
 void remove_command(Scheduler *s, int command_id, Request *r) {
@@ -182,6 +184,4 @@ void insert_command(Scheduler *s, Request *cmd_info) {
                       s->list->tail);
 }
 
-Historical* get_users_history(Scheduler *s){
-  return s->users_history; 
-}
+Historical *get_users_history(Scheduler *s) { return s->users_history; }
