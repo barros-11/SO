@@ -1,22 +1,16 @@
 #include "scheduler/round_robin.h"
 #include "scheduler/command.h"
 #include "scheduler/dispatcher.h"
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct round_robin RoundRobin;
-typedef struct job Job;
 
 struct round_robin {
   GSList *current_user;
   GSList *active_users;
-  GHashTable *users_jobs;
+  GHashTable *users_commands;
   int last_served_user;
-};
-
-struct job {
-  int user_id;
-  int command_id;
-  double created_ts;
 };
 
 static GSList *insert_user_before_current(GSList *active_users,
@@ -27,31 +21,27 @@ static GSList *insert_user_before_current(GSList *active_users,
   if (active_users == NULL)
     return g_slist_append(NULL, user_ptr);
 
-  if (g_slist_find(active_users, user_ptr) != NULL)
-    return active_users;
-
   if (current_user_node == NULL)
     return g_slist_append(active_users, user_ptr);
 
   return g_slist_insert_before(active_users, current_user_node, user_ptr);
 }
 
-static void free_job_queue(gpointer value) {
-  g_queue_free_full((GQueue *)value, g_free);
+static void free_command_queue(gpointer value) {
+  g_queue_free_full((GQueue *)value, (GDestroyNotify)command_free);
 }
 
-static void add_job(GQueue *jobs_queue, int user_id, int command_id,
-                    double created_at) {
+static void add_command_to_user_queue(GQueue *jobs_queue, int user_id,
+                                      int command_id) {
 
   if (jobs_queue == NULL)
     return;
 
-  Job *job = g_malloc(sizeof(Job));
-  job->user_id = user_id;
-  job->command_id = command_id;
-  job->created_ts = created_at;
+  Command *cmd = command_create(user_id, command_id);
+  if (cmd == NULL)
+    return;
 
-  g_queue_push_tail(jobs_queue, job);
+  g_queue_push_tail(jobs_queue, cmd);
 }
 
 static RoundRobin *initialize_data_rr() {
@@ -59,46 +49,49 @@ static RoundRobin *initialize_data_rr() {
   round_robin->current_user = NULL;
   round_robin->active_users = NULL;
   round_robin->last_served_user = -1;
-  round_robin->users_jobs = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-                                                  NULL, free_job_queue);
+  round_robin->users_commands =
+      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
+                            free_command_queue);
 
   return round_robin;
 }
 
 static void free_users_jobs(RoundRobin *round_robin) {
   g_slist_free(round_robin->active_users);
-  g_hash_table_destroy(round_robin->users_jobs);
+  g_hash_table_destroy(round_robin->users_commands);
 }
 
 static void add_command_rr(int user_id, double created_at, int command_id,
                            void *data) {
   RoundRobin *round_robin = (RoundRobin *)data;
+  (void)created_at;
 
   if (round_robin == NULL)
     return;
 
-  // linked list
-  round_robin->active_users = insert_user_before_current(
-      round_robin->active_users, round_robin->current_user, user_id);
-
   // hash table
-  GQueue *user_jobs_queue =
-      g_hash_table_lookup(round_robin->users_jobs, GINT_TO_POINTER(user_id));
+  GQueue *user_jobs_queue = g_hash_table_lookup(round_robin->users_commands,
+                                                GINT_TO_POINTER(user_id));
   if (!user_jobs_queue) {
+    round_robin->active_users = insert_user_before_current(
+        round_robin->active_users, round_robin->current_user, user_id);
 
-    Job *job = g_malloc(sizeof(Job));
-    job->user_id = user_id;
-    job->command_id = command_id;
-    job->created_ts = created_at;
+    Command *cmd = command_create(user_id, command_id);
+    if (cmd == NULL)
+      return;
 
     GQueue *jobs_queue = g_queue_new();
-    g_queue_push_head(jobs_queue, job);
+    if (jobs_queue == NULL) {
+      command_free(cmd);
+      return;
+    }
+    g_queue_push_head(jobs_queue, cmd);
 
-    g_hash_table_insert(round_robin->users_jobs, GINT_TO_POINTER(user_id),
-                        jobs_queue);
+    g_hash_table_insert(round_robin->users_commands, GINT_TO_POINTER(user_id),
+              jobs_queue);
 
   } else
-    add_job(user_jobs_queue, user_id, command_id, created_at);
+    add_command_to_user_queue(user_jobs_queue, user_id, command_id);
 }
 
 static Request *get_next_rr(void *data) {
@@ -120,16 +113,17 @@ static Request *get_next_rr(void *data) {
 
   GSList *served_user_node = round_robin->current_user;
   int user_id = GPOINTER_TO_INT(served_user_node->data);
-  GQueue *jobs_queue =
-      g_hash_table_lookup(round_robin->users_jobs, GINT_TO_POINTER(user_id));
+  GQueue *jobs_queue = g_hash_table_lookup(round_robin->users_commands,
+                                           GINT_TO_POINTER(user_id));
 
   if (jobs_queue == NULL || g_queue_is_empty(jobs_queue))
     return NULL;
 
-  Job *job = g_queue_pop_head(jobs_queue);
+  Command *next_command = (Command *)g_queue_pop_head(jobs_queue);
+  if (next_command == NULL)
+    return NULL;
+
   round_robin->last_served_user = user_id;
-  int command_id = job->command_id;
-  Command *next_command = command_create(user_id, command_id);
   Request *result = NULL;
 
   if (next_command != NULL) {
@@ -137,13 +131,12 @@ static Request *get_next_rr(void *data) {
     if (result != NULL) {
       set_user_id(command_get_user_id(next_command), result);
       set_command_id(command_get_command_id(next_command), result);
-      set_created_timestamps((long)job->created_ts, result);
+      set_created_timestamps(0, result);
       set_duration(result, 0);
       set_status(EXECUTE, result);
     }
-    command_free(next_command);
   }
-  g_free(job);
+  command_free(next_command);
 
   GSList *next_user_node = served_user_node->next ? served_user_node->next
                                                   : round_robin->active_users;
@@ -151,7 +144,7 @@ static Request *get_next_rr(void *data) {
   if (g_queue_is_empty(jobs_queue)) {
     round_robin->active_users =
         g_slist_remove(round_robin->active_users, GINT_TO_POINTER(user_id));
-    g_hash_table_remove(round_robin->users_jobs, GINT_TO_POINTER(user_id));
+    g_hash_table_remove(round_robin->users_commands, GINT_TO_POINTER(user_id));
 
     if (round_robin->active_users == NULL)
       round_robin->current_user = NULL;
