@@ -1,63 +1,84 @@
 #include "scheduler/least_commands_first.h"
+#include "request.h"
 #include "scheduler/command.h"
 #include "scheduler/dispatcher.h"
-#include "request.h"
 #include "scheduler/historical.h"
 
 #include <glib.h>
 #include <stdlib.h>
 #include <string.h>
 
+// Represents a user
 typedef struct {
-  GSequence *sequence;
-  Historical *users_history;
+  int user_id;
+  int dynamic_command_count; // Tracks history + currently queued commands
+  GQueue *pending_commands;  // Queue of Command* waiting to execute
+  GSequenceIter
+      *seq_iter; // Pointer to this user's position in the sorted sequence
+} UserEntry;
+
+typedef struct {
+  GHashTable *user_map;    // Maps user_id -> UserEntry*
+  GSequence *sorted_users; // Sorted sequence of UserEntry* for O(log N) sorting
+  Historical *users_history; // The historical database
 } LcfData;
 
-typedef struct node_data {
-  Command *command;
-  int command_counter; // number of commands ran once the controller receives the command
-} NodeData;
-
-// Lowest command counter goes first
+// Sort users by their dynamic command count (Lowest goes first)
 gint compare_lcf_nodes(gconstpointer a, gconstpointer b, gpointer user_data) {
-  (void)user_data; 
-  NodeData *node_a = (NodeData *)a;
-  NodeData *node_b = (NodeData *)b;
+  (void)user_data;
+  UserEntry *user_a = (UserEntry *)a;
+  UserEntry *user_b = (UserEntry *)b;
 
-  if (node_a->command_counter < node_b->command_counter) return -1;
-  if (node_a->command_counter > node_b->command_counter) return 1;
+  if (user_a->dynamic_command_count < user_b->dynamic_command_count)
+    return -1;
+  if (user_a->dynamic_command_count > user_b->dynamic_command_count)
+    return 1;
   return 0;
 }
 
-void add_command_lcf(int user_id, double created_at, int command_id, void *data) {
-    (void)created_at; 
+void add_command_lcf(int user_id, double created_at, int command_id,
+                     void *data) {
+  (void)created_at;
   LcfData *lcf = (LcfData *)data;
 
-  int past_commands = get_user_number_command(lcf->users_history, user_id);
+  // Lookup the user in the Hash Table
+  UserEntry *user =
+      g_hash_table_lookup(lcf->user_map, GINT_TO_POINTER(user_id));
 
-  NodeData *node = malloc(sizeof(NodeData));
-  
-  node->command = command_create(user_id, command_id); 
-  node->command_counter = past_commands;
+  // Create the user if he is not is the scheduler
+  if (user == NULL) {
+    user = malloc(sizeof(UserEntry));
+    user->user_id = user_id;
+    user->dynamic_command_count =
+        get_user_number_command(lcf->users_history, user_id);
+    user->pending_commands = g_queue_new();
 
-  // O(log n)
-  g_sequence_insert_sorted(lcf->sequence, node, compare_lcf_nodes, NULL);
+    g_hash_table_insert(lcf->user_map, GINT_TO_POINTER(user_id), user);
+    user->seq_iter = g_sequence_insert_sorted(lcf->sorted_users, user,
+                                              compare_lcf_nodes, NULL);
+  }
+
+  //  Add the new command to the user's personal queue
+  Command *cmd = command_create(user_id, command_id);
+  g_queue_push_tail(user->pending_commands, cmd);
+
+  // Update their score and let GLib automatically shift them to the right spot!
+  user->dynamic_command_count++;
+  g_sequence_sort_changed(user->seq_iter, compare_lcf_nodes, NULL);
 }
 
 Request *get_next_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
 
-  if (g_sequence_is_empty(lcf->sequence)) {
+  if (g_sequence_is_empty(lcf->sorted_users)) {
     return NULL;
   }
 
-  // Get the first element (the one with the least commands )
-  GSequenceIter *first_iter = g_sequence_get_begin_iter(lcf->sequence);
-  NodeData *node = (NodeData *)g_sequence_get(first_iter);
-  Command *cmd_info = node->command;
+  // Get the user with the lowest command count (first in the sequence)
+  GSequenceIter *first_iter = g_sequence_get_begin_iter(lcf->sorted_users);
+  UserEntry *user = (UserEntry *)g_sequence_get(first_iter);
 
-  g_sequence_remove(first_iter);
-  free(node); 
+  Command *cmd_info = g_queue_pop_head(user->pending_commands);
 
   Request *result = malloc(get_request_size());
   if (result != NULL) {
@@ -67,28 +88,46 @@ Request *get_next_lcf(void *data) {
     set_duration(result, 0);
     set_status(EXECUTE, result);
   }
-
   command_free(cmd_info);
+
+  // If this user has no more then he is removed
+  if (g_queue_is_empty(user->pending_commands)) {
+    g_sequence_remove(user->seq_iter); // Removes from the sorted tree
+    g_hash_table_remove(
+        lcf->user_map,
+        GINT_TO_POINTER(user->user_id)); // Removes from Hash Table
+    g_queue_free(user->pending_commands);
+    free(user);
+  }
+
   return result;
 }
 
 int has_commands_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
-  return !g_sequence_is_empty(lcf->sequence);
+  return !g_sequence_is_empty(lcf->sorted_users);
 }
 
 void cleanup_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
-  
-  GSequenceIter *iter = g_sequence_get_begin_iter(lcf->sequence);
+
+  GSequenceIter *iter = g_sequence_get_begin_iter(lcf->sorted_users);
   while (!g_sequence_iter_is_end(iter)) {
-    NodeData *node = (NodeData *)g_sequence_get(iter);
-    command_free(node->command);
-    free(node);
+    UserEntry *user = (UserEntry *)g_sequence_get(iter);
+
+    // Free all remaining commands in this user's queue
+    while (!g_queue_is_empty(user->pending_commands)) {
+      Command *cmd = g_queue_pop_head(user->pending_commands);
+      command_free(cmd);
+    }
+
+    g_queue_free(user->pending_commands);
+    free(user);
     iter = g_sequence_iter_next(iter);
   }
-  
-  g_sequence_free(lcf->sequence);
+
+  g_sequence_free(lcf->sorted_users);
+  g_hash_table_destroy(lcf->user_map);
   free(lcf);
 }
 
@@ -100,7 +139,8 @@ char *list_commands_lcf(void *data) {
   } else {
     while (has_commands_lcf(data)) {
       Request *next = get_next_lcf(data);
-      if (next == NULL) break;
+      if (next == NULL)
+        break;
 
       g_string_append_printf(string, "user-id %d - command-id %d\n",
                              get_user_id(next), get_command_id(next));
@@ -115,11 +155,11 @@ char *list_commands_lcf(void *data) {
 
 void initialize_scheduler_lcf(Scheduler *s) {
   LcfData *data = malloc(sizeof(LcfData));
-  
-  // We initialize without a GDestroyNotify (NULL) so g_sequence_remove 
-  // doesn't automatically free the data inside get_next_lcf
-  data->sequence = g_sequence_new(NULL); 
+
+  data->sorted_users = g_sequence_new(NULL);
+  data->user_map = g_hash_table_new(g_direct_hash, g_direct_equal);
   data->users_history = get_users_history(s);
+
   set_data(s, data);
   set_add_command_function(s, add_command_lcf);
   set_get_next_function(s, get_next_lcf);

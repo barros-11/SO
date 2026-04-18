@@ -132,6 +132,6 @@ void insert_command(Scheduler *s, Request *cmd_info);
  * @param s A pointer to the Scheduler instance.
  * @return A pointer to the Historical structure containing user statistics.
  */
-Historical* get_users_history(Scheduler *s);
+Historical *get_users_history(Scheduler *s);
 
 #endif // DISPATCHER_H

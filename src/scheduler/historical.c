@@ -13,11 +13,11 @@ typedef struct {
 } UserStats;
 
 struct historical {
-  GHashTable * historical; 
+  GHashTable *historical;
 };
 
 Historical *load_history() {
-  Historical* h = malloc(sizeof(Historical)); 
+  Historical *h = malloc(sizeof(Historical));
   GHashTable *history =
       g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
   h->historical = history;
@@ -27,12 +27,13 @@ Historical *load_history() {
     return h;
   }
 
-  UserStats us; 
-  while((read(fd, &us, sizeof(UserStats)))  == sizeof(UserStats)){
+  UserStats us;
+  while ((read(fd, &us, sizeof(UserStats))) == sizeof(UserStats)) {
     UserStats *user_stats = malloc(sizeof(UserStats));
-    if (user_stats){
-      *user_stats = us; 
-      g_hash_table_insert(history, GINT_TO_POINTER(user_stats->user_id), user_stats); 
+    if (user_stats) {
+      *user_stats = us;
+      g_hash_table_insert(history, GINT_TO_POINTER(user_stats->user_id),
+                          user_stats);
     }
   }
   close(fd);
@@ -40,7 +41,7 @@ Historical *load_history() {
 }
 
 void save_history(Historical *h) {
-  GHashTable * history = h->historical;
+  GHashTable *history = h->historical;
   if (history == NULL) {
     return;
   }
@@ -60,11 +61,32 @@ void save_history(Historical *h) {
     UserStats *stats = (UserStats *)value;
     write(fd, stats, sizeof(UserStats));
   }
-  free_history(h); 
+  free_history(h);
   close(fd);
 }
 
-void update_user_stats(Historical *h, int user_id, long duration) {
+void increment_user_command_count(Historical *h, int user_id) {
+  GHashTable *history = h->historical;
+  if (history == NULL) {
+    return;
+  }
+
+  UserStats *stats = g_hash_table_lookup(history, GINT_TO_POINTER(user_id));
+
+  if (stats == NULL) {
+    stats = malloc(sizeof(UserStats));
+    if (stats != NULL) {
+      stats->user_id = user_id;
+      stats->commands_run = 1; // Set to 1 because this is their first command
+      stats->total_execution_time = 0;
+      g_hash_table_insert(history, GINT_TO_POINTER(user_id), stats);
+    }
+  } else {
+    stats->commands_run++;
+  }
+}
+
+void increment_user_duration(Historical *h, int user_id, long duration) {
   GHashTable *history = h->historical;
   if (history == NULL) {
     return;
@@ -77,40 +99,38 @@ void update_user_stats(Historical *h, int user_id, long duration) {
     if (stats != NULL) {
       stats->user_id = user_id;
       stats->commands_run = 0;
-      stats->total_execution_time = 0;
+      stats->total_execution_time = duration;
       g_hash_table_insert(history, GINT_TO_POINTER(user_id), stats);
     }
-  }
-
-  // Update the statistics
-  if (stats != NULL) {
-    stats->commands_run++;
+  } else {
     stats->total_execution_time += duration;
   }
 }
 
 void free_history(Historical *h) {
-  GHashTable *history = h->historical; 
+  GHashTable *history = h->historical;
   if (history != NULL) {
-    // Because we used g_hash_table_new_full, this safely destroys the table 
+    // Because we used g_hash_table_new_full, this safely destroys the table
     // AND calls free() on every single UserStats struct allocated.
     g_hash_table_destroy(history);
   }
   free(h);
 }
 
-int get_user_number_command(Historical *h, int  user_id){
-  GHashTable * table = h->historical; 
-  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id)); 
-  if (p == NULL) return 0;
-  UserStats * us = (UserStats *)p; 
-  return us->commands_run; 
+int get_user_number_command(Historical *h, int user_id) {
+  GHashTable *table = h->historical;
+  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id));
+  if (p == NULL)
+    return 0;
+  UserStats *us = (UserStats *)p;
+  return us->commands_run;
 }
 
-long get_user_total_execution_time(Historical *h, int  user_id){
-  GHashTable * table = h->historical; 
-  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id)); 
-  if (p==NULL) return 0;
-  UserStats * us = (UserStats *)p; 
-  return us->total_execution_time; 
+long get_user_total_execution_time(Historical *h, int user_id) {
+  GHashTable *table = h->historical;
+  gpointer p = g_hash_table_lookup(table, GINT_TO_POINTER(user_id));
+  if (p == NULL)
+    return 0;
+  UserStats *us = (UserStats *)p;
+  return us->total_execution_time;
 }

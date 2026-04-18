@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
   set_created_timestamps(timestamp, r);
-  set_duration(r, 0); 
+  set_duration(r, 0);
 
   // --- MODO DE EXECUÇÃO (-e) ---
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
@@ -71,9 +71,9 @@ int main(int argc, char *argv[]) {
     snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
     print_runner_msg(msg);
 
-    if (wait_for_go(my_pid) == -1){
+    if (wait_for_go(my_pid) == -1) {
       print_runner_msg("Controller não aceita mais comandos");
-      return 1; 
+      return 1;
     }
 
     snprintf(msg, sizeof(msg), "executing command %d...", my_pid);
