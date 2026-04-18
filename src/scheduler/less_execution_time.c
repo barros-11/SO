@@ -9,7 +9,8 @@
 #include <string.h>
 
 typedef struct {
-  GSequence *sequence;
+  GHashTable *users_commands;
+  GSequence *active_users;
   Historical *users_history;
   Scheduler *scheduler;
 } LetData;
@@ -20,10 +21,7 @@ static long get_effective_user_time(LetData *let, int user_id) {
   return persisted + active;
 }
 
-static int compare_commands(LetData *let, Command *cmd_a, Command *cmd_b) {
-  int user_a = command_get_user_id(cmd_a);
-  int user_b = command_get_user_id(cmd_b);
-
+static int compare_users_by_let(LetData *let, int user_a, int user_b) {
   long total_a = get_effective_user_time(let, user_a);
   long total_b = get_effective_user_time(let, user_b);
 
@@ -38,27 +36,37 @@ static int compare_commands(LetData *let, Command *cmd_a, Command *cmd_b) {
   if (user_a > user_b)
     return 1;
 
-  if (command_get_command_id(cmd_a) < command_get_command_id(cmd_b))
-    return -1;
-  if (command_get_command_id(cmd_a) > command_get_command_id(cmd_b))
-    return 1;
   return 0;
 }
 
-static GSequenceIter *find_best_iter_let(LetData *let, GSequence *sequence) {
-  GSequenceIter *best = g_sequence_get_begin_iter(sequence);
+static GSequenceIter *find_best_user_iter_let(LetData *let,
+                                              GSequence *users_sequence) {
+  GSequenceIter *best = g_sequence_get_begin_iter(users_sequence);
   if (g_sequence_iter_is_end(best))
     return best;
 
   for (GSequenceIter *it = g_sequence_iter_next(best);
        !g_sequence_iter_is_end(it); it = g_sequence_iter_next(it)) {
-    Command *candidate = (Command *)g_sequence_get(it);
-    Command *current_best = (Command *)g_sequence_get(best);
-    if (compare_commands(let, candidate, current_best) < 0)
+    int candidate_user = GPOINTER_TO_INT(g_sequence_get(it));
+    int best_user = GPOINTER_TO_INT(g_sequence_get(best));
+    if (compare_users_by_let(let, candidate_user, best_user) < 0)
       best = it;
   }
 
   return best;
+}
+
+static void free_command_queue(gpointer data) {
+  GQueue *queue = (GQueue *)data;
+  if (queue == NULL)
+    return;
+
+  while (!g_queue_is_empty(queue)) {
+    Command *cmd = (Command *)g_queue_pop_head(queue);
+    command_free(cmd);
+  }
+
+  g_queue_free(queue);
 }
 
 static void add_command_let(int user_id, double created_at, int command_id,
@@ -70,22 +78,47 @@ static void add_command_let(int user_id, double created_at, int command_id,
   if (cmd == NULL)
     return;
 
-  g_sequence_append(let->sequence, cmd);
+  GQueue *queue = (GQueue *)g_hash_table_lookup(let->users_commands,
+                                                GINT_TO_POINTER(user_id));
+
+  if (queue == NULL) {
+    queue = g_queue_new();
+    if (queue == NULL) {
+      command_free(cmd);
+      return;
+    }
+
+    g_hash_table_insert(let->users_commands, GINT_TO_POINTER(user_id), queue);
+    g_sequence_append(let->active_users, GINT_TO_POINTER(user_id));
+  }
+
+  g_queue_push_tail(queue, cmd);
 }
 
 static Request *get_next_let(void *data) {
   LetData *let = (LetData *)data;
 
-  if (g_sequence_is_empty(let->sequence))
+  if (g_sequence_is_empty(let->active_users))
     return NULL;
 
-  GSequenceIter *best_iter = find_best_iter_let(let, let->sequence);
+  GSequenceIter *best_iter = find_best_user_iter_let(let, let->active_users);
   if (g_sequence_iter_is_end(best_iter))
     return NULL;
 
-  Command *cmd_info = (Command *)g_sequence_get(best_iter);
+  int user_id = GPOINTER_TO_INT(g_sequence_get(best_iter));
+  GQueue *queue = (GQueue *)g_hash_table_lookup(let->users_commands,
+                                                GINT_TO_POINTER(user_id));
+  if (queue == NULL)
+    return NULL;
 
-  g_sequence_remove(best_iter);
+  Command *cmd_info = (Command *)g_queue_pop_head(queue);
+  if (cmd_info == NULL)
+    return NULL;
+
+  if (g_queue_is_empty(queue)) {
+    g_sequence_remove(best_iter);
+    g_hash_table_remove(let->users_commands, GINT_TO_POINTER(user_id));
+  }
 
   Request *result = malloc(get_request_size());
   if (result != NULL) {
@@ -102,49 +135,32 @@ static Request *get_next_let(void *data) {
 
 static int has_commands_let(void *data) {
   LetData *let = (LetData *)data;
-  return !g_sequence_is_empty(let->sequence);
+  return !g_sequence_is_empty(let->active_users);
 }
 
 static void cleanup_let(void *data) {
   LetData *let = (LetData *)data;
 
-  GSequenceIter *iter = g_sequence_get_begin_iter(let->sequence);
-  while (!g_sequence_iter_is_end(iter)) {
-    Command *cmd = (Command *)g_sequence_get(iter);
-    command_free(cmd);
-    iter = g_sequence_iter_next(iter);
-  }
-
-  g_sequence_free(let->sequence);
+  g_hash_table_destroy(let->users_commands);
+  g_sequence_free(let->active_users);
   free(let);
 }
 
 static char *list_commands_let(void *data) {
-  LetData *let = (LetData *)data;
   GString *string = g_string_new("Scheduled\n");
 
   if (!has_commands_let(data)) {
     g_string_append(string, "No commands scheduled\n");
   } else {
-    GSequence *list = g_sequence_new(NULL);
-    for (GSequenceIter *iter = g_sequence_get_begin_iter(let->sequence);
-         !g_sequence_iter_is_end(iter); iter = g_sequence_iter_next(iter)) {
-      Command *cmd = (Command *)g_sequence_get(iter);
-      g_sequence_append(list, cmd);
-    }
+    while (has_commands_let(data)) {
+      Request *next = get_next_let(data);
+      if (next == NULL)
+        break;
 
-    while (!g_sequence_is_empty(list)) {
-      GSequenceIter *best = find_best_iter_let(let, list);
-      Command *cmd = (Command *)g_sequence_get(best);
-      if (cmd != NULL) {
-        g_string_append_printf(string, "user-id %d - command-id %d\n",
-                               command_get_user_id(cmd),
-                               command_get_command_id(cmd));
-      }
-      g_sequence_remove(best);
+      g_string_append_printf(string, "user-id %d - command-id %d\n",
+                             get_user_id(next), get_command_id(next));
+      free(next);
     }
-
-    g_sequence_free(list);
   }
 
   char *final_string = strdup(string->str);
@@ -157,7 +173,9 @@ void initialize_scheduler_let(Scheduler *s) {
   if (data == NULL)
     return;
 
-  data->sequence = g_sequence_new(NULL);
+  data->users_commands = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+                                               NULL, free_command_queue);
+  data->active_users = g_sequence_new(NULL);
   data->users_history = get_users_history(s);
   data->scheduler = s;
 
