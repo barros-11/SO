@@ -22,24 +22,12 @@ void notify_runner(int command_id, char *msg) {
   close(fd);
 }
 
-void wait_for_children(GArray *pids) {
-  for (guint i = 0; i < pids->len; i++) {
-    int pid = g_array_index(pids, int, i);
-    int status;
-    waitpid(pid, &status, 0);
-    if (!WIFEXITED(status)) {
-      perror("Error exiting a child process");
-    }
-  }
-}
-
 /**
  * Creates and opens the main named pipe for the controller.
  * Returns the file descriptor, or -1 on failure.
  */
-int 
-setup_server_pipe() {
-  unlink("tmp/controller_pipe"); 
+int setup_server_pipe(int *fd_read, int *fd_write) {
+  unlink("tmp/controller_pipe");
   if (mkfifo("tmp/controller_pipe", 0666) == -1) {
     perror("Error creating the named pipe\n");
     return -1;
@@ -50,52 +38,61 @@ setup_server_pipe() {
     perror("Error opening the controller named pipe");
     return -1;
   }
-  return fd;
+  *fd_read = fd;
+  fd = open("tmp/controller_pipe",
+            O_WRONLY); // Opens for write so it doesnt receives the EOF of any
+                       // runner doesnt have the descriptor open
+  if (fd == -1) {
+    unlink("tmp/controller_pipe");
+    perror("Error opening the controller named pipe");
+    return -1;
+  }
+  *fd_write = fd;
+  return 1;
 }
 
 /**
  * Evaluates whether the main loop should block and wait for a pipe message.
- * returns 1 if it should block 
+ * returns 1 if it should block
  * returns 0 if it should continue the loop
  */
-int check_wait_condition(int current_commands, int max_commands, int has_cmds, int acabou) {
-  if (current_commands == max_commands) {
-    return 1; 
-  } 
-  else if (!has_cmds) {
-    if (!acabou) {
-      return 1; 
-    } else if (current_commands > 0) {
-      return 1; 
-    }
+int check_wait_condition(int current_commands, int max_commands, int has_cmds,
+                         int is_pipe_empty) {
+  if (is_pipe_empty)
+    return 0; // if there is nothing to read we cant read
+
+  if (current_commands ==
+      max_commands) { // if the max number of commands are running we need to
+                      // read to see if we get the terminated from any runner
+    return 1;
+  } else if (!has_cmds) { // if there aren't any commands in the scheduler we
+                          // need to read to wait for new execute commands
+    return 1;
   }
-  return 0;
+  return 0; // if we have open slots and commands in the queue, skip reading to
+            // dispatch!
 }
 
 /**
  * Reads from the pipe and handles EOF / reopening logic.
  * Returns: 1 on success, 0 on EOF (pipe reopened), -1 on fatal error.
  */
-int handle_pipe_read(int *fd, Request *r) {
+int handle_pipe_read(int *fd, Request *r, int *is_pipe_empty) {
   ssize_t size = read(*fd, r, get_request_size());
-  
-  if (size == get_request_size()) {
-    return 1; 
+
+  if (size == get_request_size()) { // it awalys has to read a request to be
+                                    // correct (it can never be 0 bytes because
+                                    // it has the fd_write open)
+    return 1;
   }
-  
+
+  if (size == 0) {
+    *is_pipe_empty = 1;
+    return 0;
+  }
   close(*fd);
   unlink("tmp/controller_pipe");
-  
-  if (size == 0) { 
-    mkfifo("tmp/controller_pipe", 0666);
-    *fd = open("tmp/controller_pipe", O_RDONLY);
-    if (*fd == -1) {
-      perror("Error reopening controller pipe");
-      return -1;
-    }
-    return 0; 
-  }
-  
+
   perror("Error reading from pipe or incomplete request message\n");
   return -1;
 }
@@ -103,23 +100,30 @@ int handle_pipe_read(int *fd, Request *r) {
 /**
  * Processes a single Request structure and updates system states accordingly.
  */
-void process_request(Request *r, Scheduler *scheduler, int *acabou, 
-                     int *terminate_command_id, int *current_commands, GArray *pids) {
+void process_request(Request *r, Scheduler *scheduler, int *acabou,
+                     int *terminate_command_id, int *current_commands,
+                     int fd_write) {
   switch (get_status(r)) {
-  case END:
+  case END: {
     *acabou = 1;
+    unlink(
+        "tmp/controller_pipe"); // We unlink so we cant send any other commands
+    // we dont close the fd_write because the processes from the list command
+    // might need them
     *terminate_command_id = get_command_id(r);
+    Request *req = malloc(get_request_size());
+    set_status(FLUSH, req);
+    write(fd_write, req, get_request_size());
+    free(req);
     break;
+  }
   case TERMINATED:
     remove_command(scheduler, get_command_id(r), r);
     (*current_commands)--;
     break;
   case EXECUTE:
-    if (!(*acabou)) {
-      add_command(scheduler, get_user_id(r), get_created_timestamps(r), get_command_id(r));
-    } else {
-      notify_runner(get_command_id(r), "DONT EXECUTE");
-    }
+    add_command(scheduler, get_user_id(r), get_created_timestamps(r),
+                get_command_id(r));
     break;
   case LIST: {
     int pid = fork();
@@ -127,12 +131,30 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
       char *result = list_commands(scheduler);
       notify_runner(get_command_id(r), result);
       free(result);
+      Request *req = malloc(get_request_size());
+      set_command_id(getpid(),
+                     req); // put in the command id the pid to wait for
+      set_status(WAIT, req);
+      write(fd_write, req,
+            get_request_size()); // send to the controller pipe a message to
+                                 // wait for this process (it wont have to wait
+                                 // for it to finish because it is sent in the
+                                 // end of his execution)
+      free(req);
       _exit(0);
-    } else if (pid > 0) {
-      g_array_append_val(pids, pid);
-    } else {
+    } else if (pid < 0) {
       perror("fork failed");
     }
+    break;
+  }
+  case FLUSH:
+    close(fd_write);
+    break;
+  case WAIT: {
+    int status;
+    waitpid(get_command_id(r), &status, 0);
+    if (!WIFEXITED(status))
+      perror("Erro a esperar pelo processo");
     break;
   }
   }
@@ -141,82 +163,81 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
 /**
  * Dispatches pending commands from the scheduler up to the max parallel limit.
  */
-void dispatch_pending_commands(Scheduler *scheduler, int *current_commands, int max_commands) {
+void dispatch_pending_commands(Scheduler *scheduler, int *current_commands,
+                               int max_commands) {
   if (*current_commands < max_commands && has_commands(scheduler)) {
     Request *cmd = get_next(scheduler);
     if (cmd != NULL) {
       int command_id = get_command_id(cmd);
       (*current_commands)++;
       notify_runner(command_id, "GO");
-      insert_command(scheduler, cmd); 
+      insert_command(scheduler, cmd);
       free(cmd);
     }
   }
 }
 
-
-
 void controller(int max_commands, int scheduler_algorithm) {
   int terminate_command_id = -1;
   int acabou = 0;
-  int current_commands = 0; 
+  int current_commands = 0;
 
   Scheduler *scheduler = initialize_scheduler(scheduler_algorithm);
-  if (scheduler == NULL){
-    printf("Error creating the scheduler\n"); 
+  if (scheduler == NULL) {
+    printf("Error creating the scheduler\n");
     return;
   }
 
-  GArray *pids = g_array_new(FALSE, FALSE, sizeof(int));
-  
-  int fd = setup_server_pipe();
-  if (fd == -1) {
+  int fd_read;
+  int fd_write;
+  if (setup_server_pipe(&fd_read, &fd_write) == -1 || fd_read == -1 ||
+      fd_write == -1) {
     cleanup(scheduler);
-    g_array_free(pids, TRUE);
     return;
   }
 
-  while (!acabou || current_commands > 0 || has_commands(scheduler)) {
-    
-    int wait_for_pipe = check_wait_condition(current_commands, max_commands, has_commands(scheduler), acabou);
+  int is_pipe_empty = 0;
 
-    if (wait_for_pipe) {
+  while (!acabou || current_commands > 0 || has_commands(scheduler) ||
+         !is_pipe_empty) {
+
+    int wait_in_pipe = check_wait_condition(
+        current_commands, max_commands, has_commands(scheduler), is_pipe_empty);
+
+    if (wait_in_pipe) {
       Request *r = malloc(get_request_size());
-      int read_status = handle_pipe_read(&fd, r);
-      
+      int read_status = handle_pipe_read(&fd_read, r, &is_pipe_empty);
+
       if (read_status == -1) {
         // Fatal read error -> break loop and trigger cleanup at the end
         free(r);
-        break; 
-      } else if (read_status == 0) {
-        // EOF handled successfully -> skip the rest of the loop
-        free(r);
-        continue;
+        break;
       }
 
       // Success -> process the message
-      process_request(r, scheduler, &acabou, &terminate_command_id, &current_commands, pids);
+      if (read_status == 1)
+        process_request(r, scheduler, &acabou, &terminate_command_id,
+                        &current_commands, fd_write);
       free(r);
     }
 
     dispatch_pending_commands(scheduler, &current_commands, max_commands);
   }
-  
+
   // Clean up routines
-  wait_for_children(pids);
-  g_array_free(pids, TRUE);
   cleanup(scheduler);
-  if (fd != -1) close(fd);
+  if (fd_read != -1)
+    close(fd_read);
   unlink("tmp/controller_pipe");
-  
+
   if (terminate_command_id != -1) {
-    notify_runner(terminate_command_id, "ENDED"); 
+    notify_runner(terminate_command_id, "ENDED");
   }
 }
 
 int main(int n, char *args[]) {
   if (n == 3)
-    controller(atoi(args[1]), atoi(args[2])); 
+    controller(atoi(args[1]), atoi(args[2]));
   else {
     printf("Incorrect number of arguments \n");
     return 1;

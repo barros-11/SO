@@ -20,15 +20,21 @@
  * * @param p Ponteiro para a estrutura Request a ser enviada.
  * @return 0 em caso de sucesso, -1 se o pipe não puder ser aberto.
  */
-int send_to_controller(Request *r) {
+int send_to_controller(Request *r, int fd) {
+  if (write(fd, r, get_request_size()) == -1) {
+    return -1;
+  }
+  return 0;
+}
+
+int open_controller_connection() {
   int fd = open(SERVER_FIFO, O_WRONLY);
   if (fd == -1)
     return -1;
-
-  write(fd, r, get_request_size());
-  close(fd);
-  return 0;
+  return fd;
 }
+
+int close_controller_connection(int fd) { return close(fd); }
 
 /**
  * @brief Cria um Named Pipe (FIFO) exclusivo para a resposta ao Runner baseado
@@ -59,8 +65,6 @@ int wait_for_go(int pid) {
   char buffer[64];
   int bytes = read(fd, buffer, sizeof(buffer));
   close(fd);
-  if (strcmp(buffer, "DONT EXECUTE") == 0)
-    return -1; 
   return bytes;
 }
 
