@@ -52,15 +52,28 @@ int main(int argc, char *argv[]) {
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
   set_created_timestamps(timestamp, r);
-  set_duration(r, 0); 
+  set_duration(r, 0);
+
+  if (create_response_pipe(my_pid) !=
+      0) { // criar a pipe de resposta do controller para o runner
+    perror("[runner] Erro ao criar pipe de resposta");
+    free(r);
+    return 1;
+  }
+
+  int fd = open_controller_connection();
+  if (fd == -1) {
+    perror("[runner] Error opening the controller pipe");
+    free(r);
+    return 1;
+  }
 
   // --- MODO DE EXECUÇÃO (-e) ---
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
     set_status(EXECUTE, r);
     set_user_id(atoi(argv[2]), r);
-    create_response_pipe(my_pid);
 
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg(
           "Erro: o controller não está a correr ou o pipe principal falhou");
       cleanup_pipe(my_pid);
@@ -71,9 +84,9 @@ int main(int argc, char *argv[]) {
     snprintf(msg, sizeof(msg), "command %d submitted", my_pid);
     print_runner_msg(msg);
 
-    if (wait_for_go(my_pid) == -1){
+    if (wait_for_go(my_pid) == -1) {
       print_runner_msg("Controller não aceita mais comandos");
-      return 1; 
+      return 1;
     }
 
     snprintf(msg, sizeof(msg), "executing command %d...", my_pid);
@@ -94,7 +107,8 @@ int main(int argc, char *argv[]) {
     set_status(TERMINATED, r);
     set_created_timestamps(duration_since_creation, r);
     set_duration(r, duration_execution);
-    send_to_controller(r);
+    send_to_controller(r, fd);
+    close_controller_connection(fd);
 
     snprintf(msg, sizeof(msg), "command %d finished", my_pid);
     print_runner_msg(msg);
@@ -103,37 +117,26 @@ int main(int argc, char *argv[]) {
   else if (strcmp(argv[1], "-c") == 0) {
     set_status(LIST, r);
 
-    if (create_response_pipe(my_pid) != 0) {
-      perror("[runner] Erro ao criar pipe de resposta");
-      free(r);
-      return 1;
-    }
-
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
     }
-
+    close_controller_connection(fd);
     read_list_response(my_pid);
   }
   // --- MODO DE ENCERRAMENTO (-s) ---
   else if (strcmp(argv[1], "-s") == 0) {
     set_status(END, r);
 
-    if (create_response_pipe(my_pid) != 0) {
-      perror("[runner] Erro ao criar pipe de resposta");
-      free(r);
-      return 1;
-    }
-
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
     }
+    close_controller_connection(fd);
 
     print_runner_msg("sent shutdown notification");
     print_runner_msg("waiting for controller to shutdown....");
@@ -141,7 +144,6 @@ int main(int argc, char *argv[]) {
     wait_for_go(my_pid);
     print_runner_msg("controller exited.");
   }
-
   cleanup_pipe(my_pid);
   free(r);
   return 0;
