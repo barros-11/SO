@@ -1,0 +1,4 @@
+policy,parallelism,mean_wait_ms,p95_wait_ms,mean_turnaround_ms,p95_turnaround_ms,mean_exec_ms,mean_throughput_cmd_s
+FCFS,1,11715.73,32093.0,13721.92,36098.0,2005.84,0.4984
+LCF,1,21383.99,35096.0,23390.34,36103.0,2006.02,0.4984
+RR,1,18435.79,35088.0,20441.67,36095.0,2005.62,0.4985

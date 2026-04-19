@@ -6,8 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+static long now_ms(void) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+}
 
 void notify_runner(int command_id, char *msg) {
   char path[64];
@@ -170,6 +177,7 @@ void dispatch_pending_commands(Scheduler *scheduler, int *current_commands,
     if (cmd != NULL) {
       int command_id = get_command_id(cmd);
       (*current_commands)++;
+      record_dispatch_time(scheduler, command_id, now_ms());
       notify_runner(command_id, "GO");
       insert_command(scheduler, cmd);
       free(cmd);

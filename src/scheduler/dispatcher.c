@@ -9,11 +9,14 @@
 #include "stdlib.h"
 #include <fcntl.h>
 #include <glib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 struct scheduler {
   void (*addCommand)(int user_id, double created_timestamps, int command_id,
-                     void *data); // returns the command_id
+                     void *data);
   Request *(*getNext)(void *data);
   void (*cleanup)(void *data);
   int (*has_commands)(void *data);
@@ -21,18 +24,84 @@ struct scheduler {
   int total_commands;
   void *data;
 
-  int fd; // file descriptor for the logs
+  int fd;
+  int stats_fd;
+  int scheduler_algorithm;
+  int max_parallelism;
+  long run_id;
 
-  Historical *users_history; // hash table that tracks the users history
+  Historical *users_history;
 
-  // bellow are the data structers to keep track of the commands currenlty being
-  // executed
-  GHashTable
-      *table;   // maps a command in to the pointer in the linked list bellow
-  GQueue *list; // linked list with the commands that are currently running
+  GHashTable *table;
+  GQueue *list;
+  GHashTable *dispatch_times;
 };
 
+static long now_ms(void) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+}
+
+static const char *policy_name(int scheduler_algorithm) {
+  switch (scheduler_algorithm) {
+  case 0:
+    return "FCFS";
+  case 1:
+    return "RR";
+  case 2:
+    return "LCF";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+static void write_stats_header(int fd) {
+  const char *header =
+      "run_id,policy,parallelism,user_id,command_id,submit_time_ms,start_time_ms,end_time_ms,duration_ms,turnaround_ms,waiting_ms\n";
+  write(fd, header, strlen(header));
+}
+
+static void write_stats_row(Scheduler *s, int command_id, Request *event) {
+  if (s == NULL || event == NULL || s->stats_fd < 0) {
+    return;
+  }
+
+  long end_time = now_ms();
+  long turnaround = get_created_timestamps(event);
+  long submit_time = end_time - turnaround;
+  long duration = get_duration(event);
+  long start_time = submit_time;
+
+  gpointer dispatch_value =
+      g_hash_table_lookup(s->dispatch_times, GINT_TO_POINTER(command_id));
+  if (dispatch_value != NULL) {
+    start_time = *(long *)dispatch_value;
+  }
+
+  long waiting = start_time - submit_time;
+  if (waiting < 0) {
+    waiting = 0;
+  }
+
+  char buffer[256];
+  int len = snprintf(buffer, sizeof(buffer),
+                     "%ld,%s,%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld\n",
+                     s->run_id, policy_name(s->scheduler_algorithm),
+                     s->max_parallelism, get_user_id(event), command_id,
+                     submit_time, start_time, end_time, duration, turnaround,
+                     waiting);
+
+  if (len > 0) {
+    write(s->stats_fd, buffer, len);
+  }
+}
+
 Scheduler *initialize_scheduler(int scheduler_algorithm) {
+  const char *stats_path = getenv("STATS_CSV");
+  const char *parallelism_env = getenv("PARALLELISM");
+  struct stat st;
+
   Scheduler *s = malloc(sizeof(struct scheduler));
   int fd = open("logs.txt", O_CREAT | O_APPEND | O_WRONLY, 0666);
   if (fd == -1) {
@@ -40,11 +109,33 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     free(s);
     return NULL;
   }
+
+  int stats_fd =
+      open(stats_path != NULL ? stats_path : "tmp/stats.csv",
+           O_CREAT | O_APPEND | O_WRONLY, 0666);
+  if (stats_fd == -1) {
+    perror("Error opening stats csv");
+    close(fd);
+    free(s);
+    return NULL;
+  }
+
+  if (fstat(stats_fd, &st) == 0 && st.st_size == 0) {
+    write_stats_header(stats_fd);
+  }
+
   s->fd = fd;
+  s->stats_fd = stats_fd;
+  s->scheduler_algorithm = scheduler_algorithm;
+  s->max_parallelism = parallelism_env != NULL ? atoi(parallelism_env) : 0;
+  s->run_id = now_ms();
   s->table = g_hash_table_new(g_direct_hash, g_direct_equal);
   s->list = g_queue_new();
+  s->dispatch_times =
+      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
   s->total_commands = 0;
   s->users_history = load_history();
+
   switch (scheduler_algorithm) {
   case 0:
     initialize_scheduler_fcfs(s);
@@ -99,12 +190,13 @@ void set_list_commands_function(Scheduler *s,
 }
 
 void cleanup(Scheduler *s) {
-  save_history(s->users_history); // saves the historical data and also frees
-                                  // the structure
+  save_history(s->users_history);
+  g_hash_table_destroy(s->dispatch_times);
   g_hash_table_destroy(s->table);
   g_queue_free_full(s->list, free);
   s->cleanup(s->data);
   close(s->fd);
+  close(s->stats_fd);
   free(s);
 }
 
@@ -123,15 +215,13 @@ char *list_commands(Scheduler *s) {
   else
     g_queue_foreach(s->list, append_to_string, result);
   g_string_append(result, "---\n");
-  char *result_to_be_executed =
-      s->list_commands(s->data); // the string that comes from the spefic
-                                 // algorithm with the order commands
+  char *result_to_be_executed = s->list_commands(s->data);
   if (result_to_be_executed != NULL) {
     g_string_append(result, result_to_be_executed);
     free(result_to_be_executed);
   }
   char *final_result = strdup(result->str);
-  g_string_free(result, 1); // 1 <=> True,  for freeing the string
+  g_string_free(result, 1);
   return final_result;
 }
 
@@ -147,8 +237,7 @@ void save_log(Request *r, int fd) {
   long time_since_creation = get_created_timestamps(r);
 
   int len = snprintf(buffer, sizeof(buffer),
-                     "user-id: %d, command-id: %d, time_since_creation: %ld "
-                     "ms, duration: %ld ms\n",
+                     "user-id: %d, command-id: %d, time_since_creation: %ld ms, duration: %ld ms\n",
                      user_id, command_id, time_since_creation, duration);
 
   if (len > 0) {
@@ -159,12 +248,14 @@ void save_log(Request *r, int fd) {
 void remove_command(Scheduler *s, int command_id, Request *r) {
   gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
   if (element != NULL) {
+    write_stats_row(s, command_id, r);
     save_log(r, s->fd);
     update_user_stats(s->users_history, get_user_id(r), get_duration(r));
     GList *elem = (GList *)element;
     free(elem->data);
     g_queue_delete_link(s->list, elem);
     g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));
+    g_hash_table_remove(s->dispatch_times, GINT_TO_POINTER(command_id));
   }
 }
 
@@ -182,6 +273,16 @@ void insert_command(Scheduler *s, Request *cmd_info) {
   g_queue_push_tail(s->list, cmd);
   g_hash_table_insert(s->table, GINT_TO_POINTER(get_command_id(cmd_info)),
                       s->list->tail);
+}
+
+void record_dispatch_time(Scheduler *s, int command_id, long dispatch_time_ms) {
+  long *stored = malloc(sizeof(long));
+  if (stored == NULL) {
+    return;
+  }
+
+  *stored = dispatch_time_ms;
+  g_hash_table_replace(s->dispatch_times, GINT_TO_POINTER(command_id), stored);
 }
 
 Historical *get_users_history(Scheduler *s) { return s->users_history; }

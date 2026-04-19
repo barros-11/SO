@@ -128,6 +128,14 @@ void remove_command(Scheduler *s, int command_id, Request *r);
 void insert_command(Scheduler *s, Request *cmd_info);
 
 /**
+ * @brief Records the dispatch start timestamp for a command.
+ * @param s A pointer to the Scheduler instance.
+ * @param command_id The command ID.
+ * @param dispatch_time_ms Dispatch timestamp in milliseconds.
+ */
+void record_dispatch_time(Scheduler *s, int command_id, long dispatch_time_ms);
+
+/**
  * @brief Retrieves the historical records of users from the scheduler.
  * @param s A pointer to the Scheduler instance.
  * @return A pointer to the Historical structure containing user statistics.

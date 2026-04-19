@@ -90,7 +90,7 @@ for policy in $POLICIES; do
     for run in $(seq 1 "$REPEATS"); do
       echo "[tests] policy=$policy parallelism=$parallelism run=$run/$REPEATS"
 
-      STATS_CSV="$STATS_FILE" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
+      STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
       ctrl_pid="$!"
 
       if ! wait_for_controller_ready; then
