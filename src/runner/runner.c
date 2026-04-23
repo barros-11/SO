@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -59,8 +60,9 @@ int main(int argc, char *argv[]) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-  set_created_timestamps(timestamp, r);
+  set_created_at(timestamp, r);
   set_duration(r, 0);
+  set_started_at(r, 0);
 
   if (create_response_pipe(my_pid) !=
       0) { // criar a pipe de resposta do controller para o runner
@@ -80,6 +82,7 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
     set_status(EXECUTE, r);
     set_user_id(atoi(argv[2]), r);
+    long submitted_monotonic_ms = now_ms(CLOCK_MONOTONIC);
 
     if (send_to_controller(r, fd) != 0) {
       print_runner_msg(
@@ -114,7 +117,7 @@ int main(int argc, char *argv[]) {
       duration_since_creation = 0;
 
     set_status(TERMINATED, r);
-    set_created_timestamps(duration_since_creation, r);
+    set_created_at(duration_since_creation, r);
     set_duration(r, duration_execution);
     send_to_controller(r, fd);
     close_controller_connection(fd);

@@ -47,8 +47,7 @@ void cleanup(Scheduler *s);
  * @param addCommand A function pointer to the specific implementation.
  */
 void set_add_command_function(Scheduler *s,
-                              void (*addCommand)(int user_id,
-                                                 double created_timestamps,
+                              void (*addCommand)(int user_id, double created_at,
                                                  int command_id, void *data));
 
 /**
@@ -135,15 +134,13 @@ void insert_command(Scheduler *s, Request *cmd_info);
 Historical *get_users_history(Scheduler *s);
 
 /**
- * @brief Returns accumulated active execution time for a user.
+ * @brief Returns the queue of commands currently executing.
  *
- * This value is computed from commands currently executing in this controller
- * session and is intended for transient scheduling decisions.
+ * This queue is owned by the scheduler and must not be modified by callers.
  *
  * @param s A pointer to the Scheduler instance.
- * @param user_id The identifier of the user.
- * @return long Total active execution time (ms) for running commands.
+ * @return GQueue* Queue with Request pointers for running commands.
  */
-long get_user_active_execution_time(Scheduler *s, int user_id);
+GQueue *get_running_commands(Scheduler *s);
 
 #endif // DISPATCHER_H

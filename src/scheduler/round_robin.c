@@ -32,12 +32,12 @@ static void free_command_queue(gpointer value) {
 }
 
 static void add_command_to_user_queue(GQueue *jobs_queue, int user_id,
-                                      int command_id) {
+                                      int command_id, long created_at) {
 
   if (jobs_queue == NULL)
     return;
 
-  Command *cmd = command_create(user_id, command_id);
+  Command *cmd = command_create(user_id, command_id, created_at);
   if (cmd == NULL)
     return;
 
@@ -49,9 +49,8 @@ static RoundRobin *initialize_data_rr() {
   round_robin->current_user = NULL;
   round_robin->active_users = NULL;
   round_robin->last_served_user = -1;
-  round_robin->users_commands =
-      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL,
-                            free_command_queue);
+  round_robin->users_commands = g_hash_table_new_full(
+      g_direct_hash, g_direct_equal, NULL, free_command_queue);
 
   return round_robin;
 }
@@ -76,7 +75,7 @@ static void add_command_rr(int user_id, double created_at, int command_id,
     round_robin->active_users = insert_user_before_current(
         round_robin->active_users, round_robin->current_user, user_id);
 
-    Command *cmd = command_create(user_id, command_id);
+    Command *cmd = command_create(user_id, command_id, (long)created_at);
     if (cmd == NULL)
       return;
 
@@ -88,10 +87,11 @@ static void add_command_rr(int user_id, double created_at, int command_id,
     g_queue_push_head(jobs_queue, cmd);
 
     g_hash_table_insert(round_robin->users_commands, GINT_TO_POINTER(user_id),
-              jobs_queue);
+                        jobs_queue);
 
   } else
-    add_command_to_user_queue(user_jobs_queue, user_id, command_id);
+    add_command_to_user_queue(user_jobs_queue, user_id, command_id,
+                              (long)created_at);
 }
 
 static Request *get_next_rr(void *data) {
@@ -131,8 +131,9 @@ static Request *get_next_rr(void *data) {
     if (result != NULL) {
       set_user_id(command_get_user_id(next_command), result);
       set_command_id(command_get_command_id(next_command), result);
-      set_created_timestamps(0, result);
+      set_created_at(command_get_created_at(next_command), result);
       set_duration(result, 0);
+      set_started_at(result, 0);
       set_status(EXECUTE, result);
     }
   }

@@ -7,17 +7,69 @@
 #include <glib.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct {
   GHashTable *users_commands;
   GSequence *active_users;
+  GHashTable *active_time_by_user;
   Historical *users_history;
   Scheduler *scheduler;
 } LetData;
 
+static long now_ms(clockid_t clock_id) {
+  struct timespec ts;
+  if (clock_gettime(clock_id, &ts) != 0)
+    return 0;
+  return (long)(ts.tv_sec * 1000L + ts.tv_nsec / 1000000L);
+}
+
+static long get_active_time_for_user(LetData *let, int user_id) {
+  long *active = (long *)g_hash_table_lookup(let->active_time_by_user,
+                                             GINT_TO_POINTER(user_id));
+  if (active == NULL)
+    return 0;
+  return *active;
+}
+
+static void rebuild_active_time_by_user(LetData *let) {
+  g_hash_table_remove_all(let->active_time_by_user);
+
+  long now = now_ms(CLOCK_MONOTONIC);
+  GQueue *running_commands = get_running_commands(let->scheduler);
+  if (running_commands == NULL)
+    return;
+
+  for (GList *it = g_queue_peek_head_link(running_commands); it != NULL;
+       it = it->next) {
+    Request *running = (Request *)it->data;
+    if (running == NULL)
+      continue;
+
+    int user_id = get_user_id(running);
+    long started_at = get_started_at(running);
+    long active_time = now - started_at;
+    if (active_time < 0)
+      active_time = 0;
+
+    long *total_active = (long *)g_hash_table_lookup(let->active_time_by_user,
+                                                     GINT_TO_POINTER(user_id));
+    if (total_active == NULL) {
+      total_active = malloc(sizeof(long));
+      if (total_active == NULL)
+        continue;
+      *total_active = 0;
+      g_hash_table_insert(let->active_time_by_user, GINT_TO_POINTER(user_id),
+                          total_active);
+    }
+
+    *total_active += active_time;
+  }
+}
+
 static long get_effective_user_time(LetData *let, int user_id) {
   long persisted = get_user_total_execution_time(let->users_history, user_id);
-  long active = get_user_active_execution_time(let->scheduler, user_id);
+  long active = get_active_time_for_user(let, user_id);
   return persisted + active;
 }
 
@@ -41,6 +93,8 @@ static int compare_users_by_let(LetData *let, int user_a, int user_b) {
 
 static GSequenceIter *find_best_user_iter_let(LetData *let,
                                               GSequence *users_sequence) {
+  rebuild_active_time_by_user(let);
+
   GSequenceIter *best = g_sequence_get_begin_iter(users_sequence);
   if (g_sequence_iter_is_end(best))
     return best;
@@ -71,10 +125,9 @@ static void free_command_queue(gpointer data) {
 
 static void add_command_let(int user_id, double created_at, int command_id,
                             void *data) {
-  (void)created_at;
   LetData *let = (LetData *)data;
 
-  Command *cmd = command_create(user_id, command_id);
+  Command *cmd = command_create(user_id, command_id, (long)created_at);
   if (cmd == NULL)
     return;
 
@@ -124,8 +177,9 @@ static Request *get_next_let(void *data) {
   if (result != NULL) {
     set_user_id(command_get_user_id(cmd_info), result);
     set_command_id(command_get_command_id(cmd_info), result);
-    set_created_timestamps(0, result);
+    set_created_at(command_get_created_at(cmd_info), result);
     set_duration(result, 0);
+    set_started_at(result, 0);
     set_status(EXECUTE, result);
   }
 
@@ -142,6 +196,7 @@ static void cleanup_let(void *data) {
   LetData *let = (LetData *)data;
 
   g_hash_table_destroy(let->users_commands);
+  g_hash_table_destroy(let->active_time_by_user);
   g_sequence_free(let->active_users);
   free(let);
 }
@@ -176,6 +231,8 @@ void initialize_scheduler_let(Scheduler *s) {
   data->users_commands = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                                NULL, free_command_queue);
   data->active_users = g_sequence_new(NULL);
+  data->active_time_by_user =
+      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
   data->users_history = get_users_history(s);
   data->scheduler = s;
 

@@ -11,7 +11,7 @@ static void add_command_fcfs(int user_id, double created_at, int command_id,
                              void *data) {
   (void)created_at;
   GQueue *q = (GQueue *)data;
-  Command *cmd = command_create(user_id, command_id);
+  Command *cmd = command_create(user_id, command_id, (long)created_at);
   if (cmd != NULL)
     g_queue_push_tail(q, cmd);
 }
@@ -26,8 +26,9 @@ static Request *get_next_fcfs(void *data) {
   if (result != NULL) {
     set_user_id(command_get_user_id(cmd_info), result);
     set_command_id(command_get_command_id(cmd_info), result);
-    set_created_timestamps(0, result);
+    set_created_at(command_get_created_at(cmd_info), result);
     set_duration(result, 0);
+    set_started_at(result, 0);
     set_status(EXECUTE, result);
   }
 

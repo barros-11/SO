@@ -41,7 +41,7 @@ void add_command_lcf(int user_id, double created_at, int command_id,
 
   NodeData *node = malloc(sizeof(NodeData));
 
-  node->command = command_create(user_id, command_id);
+  node->command = command_create(user_id, command_id, (long)created_at);
   node->command_counter = past_commands;
 
   // O(log n)
@@ -67,8 +67,9 @@ static Request *get_next_lcf(void *data) {
   if (result != NULL) {
     set_user_id(command_get_user_id(cmd_info), result);
     set_command_id(command_get_command_id(cmd_info), result);
-    set_created_timestamps(0, result);
+    set_created_at(command_get_created_at(cmd_info), result);
     set_duration(result, 0);
+    set_started_at(result, 0);
     set_status(EXECUTE, result);
   }
 
