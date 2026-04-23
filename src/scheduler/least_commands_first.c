@@ -20,8 +20,7 @@ typedef struct node_data {
 } NodeData;
 
 // Lowest command counter goes first
-static gint compare_lcf_nodes(gconstpointer a, gconstpointer b,
-                              gpointer user_data) {
+gint compare_lcf_nodes(gconstpointer a, gconstpointer b, gpointer user_data) {
   (void)user_data;
   NodeData *node_a = (NodeData *)a;
   NodeData *node_b = (NodeData *)b;
@@ -33,8 +32,8 @@ static gint compare_lcf_nodes(gconstpointer a, gconstpointer b,
   return 0;
 }
 
-static void add_command_lcf(int user_id, double created_at, int command_id,
-                            void *data) {
+void add_command_lcf(int user_id, double created_at, int command_id,
+                     void *data) {
   (void)created_at;
   LcfData *lcf = (LcfData *)data;
 

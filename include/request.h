@@ -5,7 +5,12 @@ enum status {
   EXECUTE,
   LIST,
   TERMINATED, // a runner ended
-  END         // stop listening to runners and terminate the controller
+  END,        // stop listening to runners and terminate the controller
+  WAIT, // type that means the controller needs to wait for this pid that is in
+        // the pid of the command
+  FLUSH // type only sent by the controller that means when this command is
+        // going to be read the controller has to close is file descriptor for
+        // writting
 };
 
 typedef struct request Request;

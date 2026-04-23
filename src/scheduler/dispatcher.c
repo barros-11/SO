@@ -4,7 +4,6 @@
 #include "scheduler/fcfs.h"
 #include "scheduler/historical.h"
 #include "scheduler/least_commands_first.h"
-#include "scheduler/less_execution_time.h"
 #include "scheduler/round_robin.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -202,25 +201,3 @@ void insert_command(Scheduler *s, Request *cmd_info) {
 }
 
 Historical *get_users_history(Scheduler *s) { return s->users_history; }
-
-long get_user_active_execution_time(Scheduler *s, int user_id) {
-  if (s == NULL || s->list == NULL)
-    return 0;
-
-  long now = now_ms(CLOCK_MONOTONIC);
-  long total_active = 0;
-
-  for (GList *it = s->list->head; it != NULL; it = it->next) {
-    Request *cmd = (Request *)it->data;
-    if (cmd == NULL || get_user_id(cmd) != user_id)
-      continue;
-
-    long started_at = get_created_timestamps(cmd);
-    if (started_at <= 0 || now <= started_at)
-      continue;
-
-    total_active += (now - started_at);
-  }
-
-  return total_active;
-}
