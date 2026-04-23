@@ -1,8 +1,5 @@
 #include "scheduler/dispatcher.h"
-#include "request.h"
-#include "scheduler/command.h"
 #include "scheduler/fcfs.h"
-#include "scheduler/historical.h"
 #include "scheduler/least_commands_first.h"
 #include "scheduler/less_execution_time.h"
 #include "scheduler/round_robin.h"

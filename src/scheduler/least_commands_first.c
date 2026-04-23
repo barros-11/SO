@@ -6,7 +6,6 @@
 
 #include <glib.h>
 #include <stdlib.h>
-#include <string.h>
 
 typedef struct {
   GSequence *sequence;

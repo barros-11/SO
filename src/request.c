@@ -1,7 +1,4 @@
 #include "request.h"
-#include <stdlib.h>
-#include <sys/types.h>
-#include <time.h>
 
 struct request {
   Status status;

@@ -1,6 +1,5 @@
 #include "scheduler/round_robin.h"
 #include "scheduler/command.h"
-#include "scheduler/dispatcher.h"
 #include <stdlib.h>
 #include <string.h>
 
