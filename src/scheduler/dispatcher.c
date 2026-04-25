@@ -58,6 +58,10 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     initialize_scheduler_lcf(s);
     printf("[Scheduler] Least Commands First selected!\n");
     break;
+  default:
+    initialize_scheduler_fcfs(s);
+    printf("[Scheduler] Invalid algorithm selected! Defaulting to First Come First Served.\n");
+    break;
   }
   return s;
 }
