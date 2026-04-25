@@ -54,13 +54,27 @@ int main(int argc, char *argv[]) {
   set_created_timestamps(timestamp, r);
   set_duration(r, 0);
 
+  if (create_response_pipe(my_pid) !=
+      0) { // criar a pipe de resposta do controller para o runner
+    perror("[runner] Erro ao criar pipe de resposta");
+    free(r);
+    return 1;
+  }
+
+  int fd = open_controller_connection();
+  if (fd == -1) {
+    perror("[runner] Error opening the controller pipe");
+    cleanup_pipe(my_pid);
+    free(r);
+    return 1;
+  }
+
   // --- MODO DE EXECUÇÃO (-e) ---
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
     set_status(EXECUTE, r);
     set_user_id(atoi(argv[2]), r);
-    create_response_pipe(my_pid);
 
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg(
           "Erro: o controller não está a correr ou o pipe principal falhou");
       cleanup_pipe(my_pid);
@@ -94,7 +108,8 @@ int main(int argc, char *argv[]) {
     set_status(TERMINATED, r);
     set_created_timestamps(duration_since_creation, r);
     set_duration(r, duration_execution);
-    send_to_controller(r);
+    send_to_controller(r, fd);
+    close_controller_connection(fd);
 
     snprintf(msg, sizeof(msg), "command %d finished", my_pid);
     print_runner_msg(msg);
@@ -103,37 +118,26 @@ int main(int argc, char *argv[]) {
   else if (strcmp(argv[1], "-c") == 0) {
     set_status(LIST, r);
 
-    if (create_response_pipe(my_pid) != 0) {
-      perror("[runner] Erro ao criar pipe de resposta");
-      free(r);
-      return 1;
-    }
-
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
     }
-
+    close_controller_connection(fd);
     read_list_response(my_pid);
   }
   // --- MODO DE ENCERRAMENTO (-s) ---
   else if (strcmp(argv[1], "-s") == 0) {
     set_status(END, r);
 
-    if (create_response_pipe(my_pid) != 0) {
-      perror("[runner] Erro ao criar pipe de resposta");
-      free(r);
-      return 1;
-    }
-
-    if (send_to_controller(r) != 0) {
+    if (send_to_controller(r, fd) != 0) {
       print_runner_msg("Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
     }
+    close_controller_connection(fd);
 
     print_runner_msg("sent shutdown notification");
     print_runner_msg("waiting for controller to shutdown....");
@@ -141,7 +145,12 @@ int main(int argc, char *argv[]) {
     wait_for_go(my_pid);
     print_runner_msg("controller exited.");
   }
-
+  else {
+      write(STDERR_FILENO, "Erro: Argumento invalido\n", 25);
+      cleanup_pipe(my_pid);
+      free(r);
+      return 1;
+  }
   cleanup_pipe(my_pid);
   free(r);
   return 0;
