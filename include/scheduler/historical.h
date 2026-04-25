@@ -26,17 +26,6 @@ Historical *load_history(void);
 void save_history(Historical *h);
 
 /**
- * @brief Updates the statistics for a specific user.
- * * If the user does not exist in the historical records, a new entry is
- * created. If the user already exists, their run count is incremented, and the
- * duration is added to their total execution time.
- * * @param h Pointer to the Historical structure.
- * @param user_id The identifier of the user.
- * @param duration The total turnaround time of the command in milliseconds.
- */
-void update_user_stats(Historical *h, int user_id, long duration);
-
-/**
  * @brief Frees all memory associated with the historical records.
  * * This destroys the underlying hash table, automatically freeing all the
  * dynamically allocated UserStats structures inside it, and then frees
@@ -63,5 +52,24 @@ int get_user_number_command(Historical *h, int user_id);
  * executed by the user.
  */
 long get_user_total_execution_time(Historical *h, int user_id);
+
+/**
+ * @brief Increments the total number of commands for a specific user.
+ * If the user does not exist in the history, they are added with 1 command run.
+ *
+ * @param h Pointer to the Historical structure.
+ * @param user_id The identifier of the user.
+ */
+void increment_user_command_count(Historical *h, int user_id);
+
+/**
+ * @brief Adds a duration to the total execution time for a specific user.
+ * If the user does not exist in the history, they are added with this duration.
+ *
+ * @param h Pointer to the Historical structure.
+ * @param user_id The identifier of the user.
+ * @param duration The duration in milliseconds to add.
+ */
+void increment_user_duration(Historical *h, int user_id, long duration);
 
 #endif /* HISTORICAL_H */

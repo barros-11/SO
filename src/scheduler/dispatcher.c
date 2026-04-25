@@ -58,6 +58,10 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     initialize_scheduler_lcf(s);
     printf("[Scheduler] Least Commands First selected!\n");
     break;
+  default:
+    initialize_scheduler_fcfs(s);
+    printf("[Scheduler] Invalid algorithm selected! Defaulting to First Come First Served.\n");
+    break;
   }
   return s;
 }
@@ -65,6 +69,7 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
 int add_command(Scheduler *s, int user_id, double created_timestamp,
                 int command_id) {
   s->addCommand(user_id, created_timestamp, command_id, s->data);
+  increment_user_command_count(s->users_history, user_id);
   return s->total_commands++;
 }
 
@@ -160,7 +165,7 @@ void remove_command(Scheduler *s, int command_id, Request *r) {
   gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
   if (element != NULL) {
     save_log(r, s->fd);
-    update_user_stats(s->users_history, get_user_id(r), get_duration(r));
+    increment_user_duration(s->users_history, get_user_id(r), get_duration(r));
     GList *elem = (GList *)element;
     free(elem->data);
     g_queue_delete_link(s->list, elem);

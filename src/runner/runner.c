@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
   int fd = open_controller_connection();
   if (fd == -1) {
     perror("[runner] Error opening the controller pipe");
+    cleanup_pipe(my_pid);
     free(r);
     return 1;
   }
@@ -159,6 +160,12 @@ int main(int argc, char *argv[]) {
 
     wait_for_go(my_pid);
     print_runner_msg("controller exited.");
+  }
+  else {
+      write(STDERR_FILENO, "Erro: Argumento invalido\n", 25);
+      cleanup_pipe(my_pid);
+      free(r);
+      return 1;
   }
   cleanup_pipe(my_pid);
   free(r);
