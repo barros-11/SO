@@ -10,7 +10,7 @@
 
 typedef struct {
   GHashTable *users_commands;
-  GSequence *active_users;
+  GQueue *active_users;
   GHashTable *active_time_by_user;
   Historical *users_history;
   Scheduler *scheduler;
@@ -24,11 +24,8 @@ static long now_ms(clockid_t clock_id) {
 }
 
 static long get_active_time_for_user(LetData *let, int user_id) {
-  long *active = (long *)g_hash_table_lookup(let->active_time_by_user,
-                                             GINT_TO_POINTER(user_id));
-  if (active == NULL)
-    return 0;
-  return *active;
+  return (long)GPOINTER_TO_SIZE(
+      g_hash_table_lookup(let->active_time_by_user, GINT_TO_POINTER(user_id)));
 }
 
 static void rebuild_active_time_by_user(LetData *let) {
@@ -51,18 +48,10 @@ static void rebuild_active_time_by_user(LetData *let) {
     if (active_time < 0)
       active_time = 0;
 
-    long *total_active = (long *)g_hash_table_lookup(let->active_time_by_user,
-                                                     GINT_TO_POINTER(user_id));
-    if (total_active == NULL) {
-      total_active = malloc(sizeof(long));
-      if (total_active == NULL)
-        continue;
-      *total_active = 0;
-      g_hash_table_insert(let->active_time_by_user, GINT_TO_POINTER(user_id),
-                          total_active);
-    }
-
-    *total_active += active_time;
+    gsize current = GPOINTER_TO_SIZE(g_hash_table_lookup(
+        let->active_time_by_user, GINT_TO_POINTER(user_id)));
+    g_hash_table_insert(let->active_time_by_user, GINT_TO_POINTER(user_id),
+                        GSIZE_TO_POINTER(current + (gsize)active_time));
   }
 }
 
@@ -90,21 +79,19 @@ static int compare_users_by_let(LetData *let, int user_a, int user_b) {
   return 0;
 }
 
-static GSequenceIter *find_best_user_iter_let(LetData *let,
-                                              GSequence *users_sequence) {
+static GList *find_best_user_link_let(LetData *let, GQueue *users_queue) {
   rebuild_active_time_by_user(let);
 
-  GSequenceIter *best = g_sequence_get_begin_iter(users_sequence);
-  if (g_sequence_iter_is_end(best))
-    return best;
+  GList *best = g_queue_peek_head_link(users_queue);
+  if (best == NULL)
+    return NULL;
 
-  for (GSequenceIter *it = g_sequence_iter_next(best);
-       !g_sequence_iter_is_end(it); it = g_sequence_iter_next(it)) {
-    int candidate_user = GPOINTER_TO_INT(g_sequence_get(it));
-    int best_user = GPOINTER_TO_INT(g_sequence_get(best));
-    if (compare_users_by_let(let, candidate_user, best_user) < 0)
-      best = it;
-  }
+  for (GList *it = best->next; it != NULL; it = it->next) {
+    int candidate_user = GPOINTER_TO_INT(it->data);
+    int best_user = GPOINTER_TO_INT(best->data);
+     if (compare_users_by_let(let, candidate_user, best_user) < 0)
+       best = it;
+   }
 
   return best;
 }
@@ -141,7 +128,7 @@ static void add_command_let(int user_id, double created_at, int command_id,
     }
 
     g_hash_table_insert(let->users_commands, GINT_TO_POINTER(user_id), queue);
-    g_sequence_append(let->active_users, GINT_TO_POINTER(user_id));
+    g_queue_push_tail(let->active_users, GINT_TO_POINTER(user_id));
   }
 
   g_queue_push_tail(queue, cmd);
@@ -150,14 +137,14 @@ static void add_command_let(int user_id, double created_at, int command_id,
 static Request *get_next_let(void *data) {
   LetData *let = (LetData *)data;
 
-  if (g_sequence_is_empty(let->active_users))
+  if (g_queue_is_empty(let->active_users))
     return NULL;
 
-  GSequenceIter *best_iter = find_best_user_iter_let(let, let->active_users);
-  if (g_sequence_iter_is_end(best_iter))
+  GList *best_link = find_best_user_link_let(let, let->active_users);
+  if (best_link == NULL)
     return NULL;
 
-  int user_id = GPOINTER_TO_INT(g_sequence_get(best_iter));
+  int user_id = GPOINTER_TO_INT(best_link->data);
   GQueue *queue = (GQueue *)g_hash_table_lookup(let->users_commands,
                                                 GINT_TO_POINTER(user_id));
   if (queue == NULL)
@@ -168,7 +155,7 @@ static Request *get_next_let(void *data) {
     return NULL;
 
   if (g_queue_is_empty(queue)) {
-    g_sequence_remove(best_iter);
+    g_queue_delete_link(let->active_users, best_link);
     g_hash_table_remove(let->users_commands, GINT_TO_POINTER(user_id));
   }
 
@@ -188,7 +175,7 @@ static Request *get_next_let(void *data) {
 
 static int has_commands_let(void *data) {
   LetData *let = (LetData *)data;
-  return !g_sequence_is_empty(let->active_users);
+  return !g_queue_is_empty(let->active_users);
 }
 
 static void cleanup_let(void *data) {
@@ -196,7 +183,7 @@ static void cleanup_let(void *data) {
 
   g_hash_table_destroy(let->users_commands);
   g_hash_table_destroy(let->active_time_by_user);
-  g_sequence_free(let->active_users);
+  g_queue_free(let->active_users);
   free(let);
 }
 
@@ -229,9 +216,9 @@ void initialize_scheduler_let(Scheduler *s) {
 
   data->users_commands = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                                NULL, free_command_queue);
-  data->active_users = g_sequence_new(NULL);
+  data->active_users = g_queue_new();
   data->active_time_by_user =
-      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
+      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
   data->users_history = get_users_history(s);
   data->scheduler = s;
 
