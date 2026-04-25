@@ -22,11 +22,19 @@
  * @param count Número de elementos a remover.
  */
 static void remove_args(char *argv[], int index, int count) {
+  // free the arguments that are being removed
+  for (int j = 0; j < count; j++) {
+    if (argv[index + j] != NULL) {
+      free(argv[index + j]);
+    }
+  }
   int i;
   for (i = index; argv[i + count] != NULL; i++) {
     argv[i] = argv[i + count];
   }
-  argv[i] = NULL;
+  for (int j = 0; j < count; j++) {
+    argv[i + j] = NULL;
+  }
 }
 
 /**
@@ -130,6 +138,7 @@ static int parse_pipe_commands(int argc, char *argv[], char **commands[],
   commands[count++] = &argv[0];
   for (int i = 0; i < argc; i++) {
     if (argv[i] != NULL && strcmp(argv[i], "|") == 0) {
+      free(argv[i]);
       argv[i] = NULL;
       if (count < max_cmds) {
         commands[count++] = &argv[i + 1];

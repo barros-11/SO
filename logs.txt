@@ -180,3 +180,8 @@ user-id: 3, command-id: 595958, time_since_creation: 2003 ms, duration: 2003 ms
 user-id: 3, command-id: 595965, time_since_creation: 2004 ms, duration: 2004 ms
 user-id: 3, command-id: 596350, time_since_creation: 2002 ms, duration: 2002 ms
 user-id: 3, command-id: 596353, time_since_creation: 3371 ms, duration: 2003 ms
+user-id: 103, command-id: 1382429, time_since_creation: 158 ms, duration: 157 ms
+user-id: 103, command-id: 1383111, time_since_creation: 14 ms, duration: 13 ms
+user-id: 103, command-id: 1387723, time_since_creation: 4 ms, duration: 4 ms
+user-id: 103, command-id: 1388069, time_since_creation: 4 ms, duration: 3 ms
+user-id: 103, command-id: 1388295, time_since_creation: 5 ms, duration: 4 ms

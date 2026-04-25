@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <glib.h>
 
 /**
  * @brief Imprime uma mensagem no terminal com a etiqueta padrão [runner].
@@ -96,7 +97,22 @@ int main(int argc, char *argv[]) {
     gettimeofday(&tv_start, NULL);
     long start_time = tv_start.tv_sec * 1000 + tv_start.tv_usec / 1000;
 
-    execute_command(argc - 3, &argv[3]);
+    char**argv_exec = NULL; 
+    int argc_exec = 0; 
+    if (!g_shell_parse_argv(argv[3], &argc_exec, &argv_exec, NULL)) {
+      print_runner_msg("Erro ao parsear o comando");
+      cleanup_pipe(my_pid);
+      free(r);
+      return 1;
+    }
+    execute_command(argc_exec ,  argv_exec);
+    
+    for (int i = 0; i < argc_exec; i++) {
+      if (argv_exec[i] != NULL) {
+        g_free(argv_exec[i]);
+      }
+    }
+    g_free(argv_exec);
 
     struct timeval tv_end;
     gettimeofday(&tv_end, NULL);
