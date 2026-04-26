@@ -68,14 +68,14 @@ int get_user_id(Request *r);
  * @param ts Timestamp value.
  * @param r Pointer to the request.
  */
-void set_created_timestamps(long ts, Request *r);
+void set_created_at(long ts, Request *r);
 
 /**
  * @brief Get request creation timestamp.
  * @param r Pointer to the request.
  * @return Creation timestamp.
  */
-long get_created_timestamps(Request *r);
+long get_created_at(Request *r);
 
 /**
  * @brief Get the binary size of the request structure.
@@ -96,5 +96,22 @@ void set_duration(Request *r, long duration);
  * @return Duration value.
  */
 long get_duration(Request *r);
+
+/**
+ * @brief Set command start timestamp metadata (ms).
+ *
+ * While a command is running, this field stores when execution started.
+ *
+ * @param r Pointer to the request.
+ * @param started_at Start timestamp in milliseconds.
+ */
+void set_started_at(Request *r, long started_at);
+
+/**
+ * @brief Get command start timestamp metadata (ms).
+ * @param r Pointer to the request.
+ * @return Start timestamp in milliseconds.
+ */
+long get_started_at(Request *r);
 
 #endif // PROTOCOL_H

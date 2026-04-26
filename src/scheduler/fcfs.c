@@ -5,18 +5,18 @@
 #include <glib.h>
 #include <stdlib.h>
 
-void *initialize_data_fcfs() { return ((void *)g_queue_new()); }
+static void *initialize_data_fcfs() { return ((void *)g_queue_new()); }
 
-void add_command_fcfs(int user_id, double created_at, int command_id,
-                      void *data) {
+static void add_command_fcfs(int user_id, double created_at, int command_id,
+                             void *data) {
   (void)created_at;
   GQueue *q = (GQueue *)data;
-  Command *cmd = command_create(user_id, command_id);
+  Command *cmd = command_create(user_id, command_id, (long)created_at);
   if (cmd != NULL)
     g_queue_push_tail(q, cmd);
 }
 
-Request *get_next_fcfs(void *data) {
+static Request *get_next_fcfs(void *data) {
   GQueue *q = (GQueue *)data;
   Command *cmd_info = (Command *)g_queue_pop_head(q);
   if (cmd_info == NULL)
@@ -26,8 +26,9 @@ Request *get_next_fcfs(void *data) {
   if (result != NULL) {
     set_user_id(command_get_user_id(cmd_info), result);
     set_command_id(command_get_command_id(cmd_info), result);
-    set_created_timestamps(0, result);
+    set_created_at(command_get_created_at(cmd_info), result);
     set_duration(result, 0);
+    set_started_at(result, 0);
     set_status(EXECUTE, result);
   }
 
@@ -35,18 +36,18 @@ Request *get_next_fcfs(void *data) {
   return result;
 }
 
-void cleanup_fcfs(void *data) {
+static void cleanup_fcfs(void *data) {
   g_queue_free_full((GQueue *)data, (GDestroyNotify)command_free);
 }
 
-void append_to_string_fcfs(gpointer data, gpointer user_data) {
+static void append_to_string_fcfs(gpointer data, gpointer user_data) {
   GString *string = (GString *)user_data;
   Command *cmd = (Command *)data;
   g_string_append_printf(string, "user-id %d - command-id %d\n",
                          command_get_user_id(cmd), command_get_command_id(cmd));
 }
 
-char *list_commands_fcfs(void *data) {
+static char *list_commands_fcfs(void *data) {
   GQueue *q = (GQueue *)data;
   GString *string = g_string_new(NULL);
   g_string_append(string, "Scheduled\n");
@@ -59,6 +60,11 @@ char *list_commands_fcfs(void *data) {
   return final_string;
 }
 
+static int has_commands_fcfs(void *data) {
+  GQueue *q = (GQueue *)data;
+  return q->length != 0;
+}
+
 void initialize_scheduler_fcfs(Scheduler *s) {
   set_add_command_function(s, add_command_fcfs);
   set_get_next_function(s, get_next_fcfs);
@@ -66,9 +72,4 @@ void initialize_scheduler_fcfs(Scheduler *s) {
   set_has_commands_function(s, has_commands_fcfs);
   set_list_commands_function(s, list_commands_fcfs);
   set_data(s, initialize_data_fcfs());
-}
-
-int has_commands_fcfs(void *data) {
-  GQueue *q = (GQueue *)data;
-  return q->length != 0;
 }

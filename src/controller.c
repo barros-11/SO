@@ -1,13 +1,20 @@
 #include "request.h"
 #include "scheduler/dispatcher.h"
 #include <fcntl.h>
-#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
+
+static long now_ms(clockid_t clock_id) {
+  struct timespec ts;
+  if (clock_gettime(clock_id, &ts) != 0) {
+    return 0;
+  }
+  return (long)(ts.tv_sec * 1000L + ts.tv_nsec / 1000000L);
+}
 
 void notify_runner(int command_id, char *msg) {
   char path[64];
@@ -122,7 +129,7 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
     (*current_commands)--;
     break;
   case EXECUTE:
-    add_command(scheduler, get_user_id(r), get_created_timestamps(r),
+    add_command(scheduler, get_user_id(r), get_created_at(r),
                 get_command_id(r));
     break;
   case LIST: {
@@ -169,7 +176,9 @@ void dispatch_pending_commands(Scheduler *scheduler, int *current_commands,
     Request *cmd = get_next(scheduler);
     if (cmd != NULL) {
       int command_id = get_command_id(cmd);
+      long started_at = now_ms(CLOCK_MONOTONIC);
       (*current_commands)++;
+      set_started_at(cmd, started_at);
       notify_runner(command_id, "GO");
       insert_command(scheduler, cmd);
       free(cmd);
