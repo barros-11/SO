@@ -117,8 +117,12 @@ void set_list_commands_function(Scheduler *s,
  * @brief Remove um comando específico da lista de comandos em execução.
  * @param s Um ponteiro para a instância do Scheduler.
  * @param command_id O ID do comando a remover.
+ * @param r Um ponteiro para a estrutura Request associada ao comando, usada
+ * para salvar o log antes de remover.
+ * @return 0 se o comando foi encontrado e removido, -1 se o comando não foi
+ * encontrado.
  */
-void remove_command(Scheduler *s, int command_id, Request *r);
+int remove_command(Scheduler *s, int command_id, Request *r);
 
 /**
  * @brief Insere um comando na lista de comandos em execução.

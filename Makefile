@@ -16,7 +16,7 @@ GLIB_LIBS := $(shell pkg-config --libs glib-2.0)
 
 CFLAGS := $(BASE_CFLAGS) $(GLIB_CFLAGS) $(CFLAGS_$(BUILD_TYPE))
 LDFLAGS += $(LDFLAGS_$(BUILD_TYPE))
-LDLIBS := $(GLIB_LIBS) -lncursesw
+LDLIBS := $(GLIB_LIBS)
 
 SRC := $(shell find src -name "*.c")
 COMMON_SRC := $(filter-out src/controller.c src/runner/runner.c,$(SRC))

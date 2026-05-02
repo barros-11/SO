@@ -7,6 +7,7 @@
 #include "runner/executor.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +26,7 @@ static void remove_args(char *argv[], int index, int count) {
   // free the arguments that are being removed
   for (int j = 0; j < count; j++) {
     if (argv[index + j] != NULL) {
-      free(argv[index + j]);
+      g_free(argv[index + j]);
     }
   }
   int i;
@@ -138,7 +139,7 @@ static int parse_pipe_commands(int argc, char *argv[], char **commands[],
   commands[count++] = &argv[0];
   for (int i = 0; i < argc; i++) {
     if (argv[i] != NULL && strcmp(argv[i], "|") == 0) {
-      free(argv[i]);
+      g_free(argv[i]);
       argv[i] = NULL;
       if (count < max_cmds) {
         commands[count++] = &argv[i + 1];
@@ -154,7 +155,7 @@ static int parse_pipe_commands(int argc, char *argv[], char **commands[],
  * @param argv Vetor de strings com o comando e argumentos.
  * @return Status de saída do último comando da cadeia.
  */
-int execute_command(int argc, char *argv[]) {
+int execute_command(int argc, char *argv[], int controller_fd) {
   char **commands[MAX_CMDS];
   pid_t pids[MAX_CMDS];
   int num_cmds = parse_pipe_commands(argc, argv, commands, MAX_CMDS);
@@ -179,6 +180,7 @@ int execute_command(int argc, char *argv[]) {
     }
 
     if (pids[i] == 0) {
+      close(controller_fd); // Close controller fd in child processes
       int input = prev_read_fd;
       int output = is_last ? -1 : pipe_fds[1];
       int to_close = is_last ? -1 : pipe_fds[0];

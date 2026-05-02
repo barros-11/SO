@@ -49,7 +49,8 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
   switch (scheduler_algorithm) {
   case 0:
     initialize_scheduler_fcfs(s);
-    snprintf(buffer, sizeof(buffer), "[Scheduler] First Come First Served selected!\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] First Come First Served selected!\n");
     break;
   case 1:
     initialize_scheduler_rr(s);
@@ -57,11 +58,14 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     break;
   case 2:
     initialize_scheduler_lcf(s);
-    snprintf(buffer, sizeof(buffer), "[Scheduler] Least Commands First selected!\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] Least Commands First selected!\n");
     break;
   default:
     initialize_scheduler_fcfs(s);
-    snprintf(buffer, sizeof(buffer), "[Scheduler] Invalid algorithm selected! Defaulting to First Come First Served\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] Invalid algorithm selected! Defaulting to First Come "
+             "First Served\n");
     break;
   }
   write(STDOUT_FILENO, buffer, strlen(buffer));
@@ -163,7 +167,7 @@ void save_log(Request *r, int fd) {
   }
 }
 
-void remove_command(Scheduler *s, int command_id, Request *r) {
+int remove_command(Scheduler *s, int command_id, Request *r) {
   gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
   if (element != NULL) {
     save_log(r, s->fd);
@@ -172,7 +176,9 @@ void remove_command(Scheduler *s, int command_id, Request *r) {
     free(elem->data);
     g_queue_delete_link(s->list, elem);
     g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));
+    return 0;
   }
+  return -1;
 }
 
 void insert_command(Scheduler *s, Request *cmd_info) {
