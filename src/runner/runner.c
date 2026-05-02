@@ -24,7 +24,6 @@ void print_runner_msg(char *message) {
   char buffer[256];
   int len = snprintf(buffer, sizeof(buffer), "[runner] %s\n", message);
   if (len > 0) {
-    // Uso de write para garantir atomicidade e cumprir restrições da UC
     write(STDOUT_FILENO, buffer, len);
   }
 }

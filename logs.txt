@@ -195,3 +195,6 @@ user-id: 103, command-id: 1403347, time_since_creation: 3 ms, duration: 2 ms
 user-id: 103, command-id: 1403486, time_since_creation: 2 ms, duration: 2 ms
 user-id: 103, command-id: 1405454, time_since_creation: 2 ms, duration: 1 ms
 user-id: 103, command-id: 1405623, time_since_creation: 3 ms, duration: 2 ms
+user-id: 103, command-id: 1726723, time_since_creation: 10004 ms, duration: 10003 ms
+user-id: 103, command-id: 1727281, time_since_creation: 10003 ms, duration: 10002 ms
+user-id: 103, command-id: 1744119, time_since_creation: 10003 ms, duration: 10003 ms

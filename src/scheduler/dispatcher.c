@@ -45,24 +45,26 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
   s->list = g_queue_new();
   s->total_commands = 0;
   s->users_history = load_history();
+  char buffer[128];
   switch (scheduler_algorithm) {
   case 0:
     initialize_scheduler_fcfs(s);
-    printf("[Scheduler] First Come First Served selected!\n");
+    snprintf(buffer, sizeof(buffer), "[Scheduler] First Come First Served selected!\n");
     break;
   case 1:
     initialize_scheduler_rr(s);
-    printf("[Scheduler] Round Robin selected!\n");
+    snprintf(buffer, sizeof(buffer), "[Scheduler] Round Robin selected!\n");
     break;
   case 2:
     initialize_scheduler_lcf(s);
-    printf("[Scheduler] Least Commands First selected!\n");
+    snprintf(buffer, sizeof(buffer), "[Scheduler] Least Commands First selected!\n");
     break;
   default:
     initialize_scheduler_fcfs(s);
-    printf("[Scheduler] Invalid algorithm selected! Defaulting to First Come First Served.\n");
+    snprintf(buffer, sizeof(buffer), "[Scheduler] Invalid algorithm selected! Defaulting to First Come First Served\n");
     break;
   }
+  write(STDOUT_FILENO, buffer, strlen(buffer));
   return s;
 }
 
@@ -122,7 +124,7 @@ void append_to_string(gpointer data, gpointer user_data) {
 
 char *list_commands(Scheduler *s) {
   GString *result = g_string_new("");
-  g_string_append(result, "\n-- \nExecuting\n");
+  g_string_append(result, "\n---\nExecuting\n");
   if (s->list->length == 0)
     g_string_append(result, "No commands executing\n");
   else

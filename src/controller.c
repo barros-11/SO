@@ -184,7 +184,9 @@ void controller(int max_commands, int scheduler_algorithm) {
 
   Scheduler *scheduler = initialize_scheduler(scheduler_algorithm);
   if (scheduler == NULL) {
-    printf("Error creating the scheduler\n");
+    char buffer[128]; 
+    snprintf(buffer, sizeof(buffer), "Error creating the scheduler\n");
+    write(STDERR_FILENO, buffer, strlen(buffer));
     return;
   }
 
@@ -239,7 +241,9 @@ int main(int n, char *args[]) {
   if (n == 3)
     controller(atoi(args[1]), atoi(args[2]));
   else {
-    printf("Incorrect number of arguments \n");
+    char buffer[128]; 
+    snprintf(buffer, sizeof(buffer), "Incorrect number of arguments\n");
+    write(STDERR_FILENO, buffer, strlen(buffer));
     return 1;
   }
   return 0;
