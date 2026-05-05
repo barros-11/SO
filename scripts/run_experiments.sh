@@ -9,6 +9,7 @@ POLICIES="${POLICIES:-0 1 2 3}"
 PARALLELISM="${PARALLELISM:-1 2 4 8}"
 STATS_FILE="${STATS_FILE:-tmp/stats.csv}"
 CLEAR_STATS="${CLEAR_STATS:-1}"
+CLEAR_HISTORY="${CLEAR_HISTORY:-1}"
 LOCK_DIR="tmp/.experiments.lock"
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -89,6 +90,10 @@ for policy in $POLICIES; do
   for parallelism in $PARALLELISM; do
     for run in $(seq 1 "$REPEATS"); do
       echo "[tests] policy=$policy parallelism=$parallelism run=$run/$REPEATS"
+
+      if [[ "$CLEAR_HISTORY" == "1" ]]; then
+        rm -f historical.bin
+      fi
 
       STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
       ctrl_pid="$!"
