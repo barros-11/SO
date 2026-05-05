@@ -1,4 +1,4 @@
-policy,parallelism,mean_wait_ms,p95_wait_ms,mean_turnaround_ms,p95_turnaround_ms,mean_exec_ms,mean_throughput_cmd_s
-FCFS,1,11715.73,32093.0,13721.92,36098.0,2005.84,0.4984
-LCF,1,21383.99,35096.0,23390.34,36103.0,2006.02,0.4984
-RR,1,18435.79,35088.0,20441.67,36095.0,2005.62,0.4985
+policy,parallelism,mean_wait_ms,p95_wait_ms,p99_wait_ms,cv_wait,jain_wait,mean_turnaround_ms,p95_turnaround_ms,p99_turnaround_ms,cv_turnaround,jain_turnaround,mean_slowdown,p95_slowdown,p99_slowdown,cv_slowdown,jain_slowdown,max_min_wait_ratio,max_min_turnaround_ratio,mean_exec_ms,mean_throughput_cmd_s
+FCFS,1,11715.73,32093.0,32102.0,0.801,0.6118,13721.92,36098.0,36107.0,0.7633,0.6344,6.173,10.004,10.0125,0.3931,0.8674,inf,35.97,2005.84,0.4984
+LCF,1,21383.99,35096.0,35112.0,0.5279,0.784,23390.34,36103.0,36119.0,0.448,0.8344,17.4564,35.8679,35.8966,0.748,0.6438,inf,35.94,2006.02,0.4984
+RR,1,18435.79,35088.0,35110.0,0.6234,0.7224,20441.67,36095.0,36117.0,0.5501,0.7697,14.1391,35.8451,35.9046,0.8208,0.6001,inf,35.98,2005.62,0.4985
