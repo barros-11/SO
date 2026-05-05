@@ -65,7 +65,28 @@ void save_history(Historical *h) {
   close(fd);
 }
 
-void update_user_stats(Historical *h, int user_id, long duration) {
+void increment_user_command_count(Historical *h, int user_id) {
+  GHashTable *history = h->historical;
+  if (history == NULL) {
+    return;
+  }
+
+  UserStats *stats = g_hash_table_lookup(history, GINT_TO_POINTER(user_id));
+
+  if (stats == NULL) {
+    stats = malloc(sizeof(UserStats));
+    if (stats != NULL) {
+      stats->user_id = user_id;
+      stats->commands_run = 1; // Set to 1 because this is their first command
+      stats->total_execution_time = 0;
+      g_hash_table_insert(history, GINT_TO_POINTER(user_id), stats);
+    }
+  } else {
+    stats->commands_run++;
+  }
+}
+
+void increment_user_duration(Historical *h, int user_id, long duration) {
   GHashTable *history = h->historical;
   if (history == NULL) {
     return;
@@ -78,14 +99,10 @@ void update_user_stats(Historical *h, int user_id, long duration) {
     if (stats != NULL) {
       stats->user_id = user_id;
       stats->commands_run = 0;
-      stats->total_execution_time = 0;
+      stats->total_execution_time = duration;
       g_hash_table_insert(history, GINT_TO_POINTER(user_id), stats);
     }
-  }
-
-  // Update the statistics
-  if (stats != NULL) {
-    stats->commands_run++;
+  } else {
     stats->total_execution_time += duration;
   }
 }

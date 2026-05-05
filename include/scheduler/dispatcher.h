@@ -47,8 +47,7 @@ void cleanup(Scheduler *s);
  * @param addCommand A function pointer to the specific implementation.
  */
 void set_add_command_function(Scheduler *s,
-                              void (*addCommand)(int user_id,
-                                                 double created_timestamps,
+                              void (*addCommand)(int user_id, double created_at,
                                                  int command_id, void *data));
 
 /**
@@ -141,5 +140,15 @@ void record_dispatch_time(Scheduler *s, int command_id, long dispatch_time_ms);
  * @return A pointer to the Historical structure containing user statistics.
  */
 Historical *get_users_history(Scheduler *s);
+
+/**
+ * @brief Returns the queue of commands currently executing.
+ *
+ * This queue is owned by the scheduler and must not be modified by callers.
+ *
+ * @param s A pointer to the Scheduler instance.
+ * @return GQueue* Queue with Request pointers for running commands.
+ */
+GQueue *get_running_commands(Scheduler *s);
 
 #endif // DISPATCHER_H

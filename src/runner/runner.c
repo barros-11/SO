@@ -13,7 +13,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
+
+static long now_ms(clockid_t clock_id) {
+  struct timespec ts;
+  if (clock_gettime(clock_id, &ts) != 0) {
+    return 0;
+  }
+  return (long)(ts.tv_sec * 1000L + ts.tv_nsec / 1000000L);
+}
 
 /**
  * @brief Imprime uma mensagem no terminal com a etiqueta padrão [runner].
@@ -51,8 +60,9 @@ int main(int argc, char *argv[]) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-  set_created_timestamps(timestamp, r);
+  set_created_at(timestamp, r);
   set_duration(r, 0);
+  set_started_at(r, 0);
 
   if (create_response_pipe(my_pid) !=
       0) { // criar a pipe de resposta do controller para o runner
@@ -64,6 +74,7 @@ int main(int argc, char *argv[]) {
   int fd = open_controller_connection();
   if (fd == -1) {
     perror("[runner] Error opening the controller pipe");
+    cleanup_pipe(my_pid);
     free(r);
     return 1;
   }
@@ -72,6 +83,7 @@ int main(int argc, char *argv[]) {
   if (strcmp(argv[1], "-e") == 0 && argc >= 4) {
     set_status(EXECUTE, r);
     set_user_id(atoi(argv[2]), r);
+    long submitted_monotonic_ms = now_ms(CLOCK_MONOTONIC);
 
     if (send_to_controller(r, fd) != 0) {
       print_runner_msg(
@@ -92,20 +104,21 @@ int main(int argc, char *argv[]) {
     snprintf(msg, sizeof(msg), "executing command %d...", my_pid);
     print_runner_msg(msg);
 
-    struct timeval tv_start;
-    gettimeofday(&tv_start, NULL);
-    long start_time = tv_start.tv_sec * 1000 + tv_start.tv_usec / 1000;
+    long execution_start_ms = now_ms(CLOCK_MONOTONIC);
 
     execute_command(argc - 3, &argv[3]);
 
-    struct timeval tv_end;
-    gettimeofday(&tv_end, NULL);
-    long end_time = tv_end.tv_sec * 1000 + tv_end.tv_usec / 1000;
-    long duration_execution = end_time - start_time;
-    long duration_since_creation = end_time - get_created_timestamps(r);
+    long execution_end_ms = now_ms(CLOCK_MONOTONIC);
+    long duration_execution = execution_end_ms - execution_start_ms;
+    long duration_since_creation = execution_end_ms - submitted_monotonic_ms;
+
+    if (duration_execution < 0)
+      duration_execution = 0;
+    if (duration_since_creation < 0)
+      duration_since_creation = 0;
 
     set_status(TERMINATED, r);
-    set_created_timestamps(duration_since_creation, r);
+    set_created_at(duration_since_creation, r);
     set_duration(r, duration_execution);
     send_to_controller(r, fd);
     close_controller_connection(fd);
@@ -143,6 +156,12 @@ int main(int argc, char *argv[]) {
 
     wait_for_go(my_pid);
     print_runner_msg("controller exited.");
+  }
+  else {
+      write(STDERR_FILENO, "Erro: Argumento invalido\n", 25);
+      cleanup_pipe(my_pid);
+      free(r);
+      return 1;
   }
   cleanup_pipe(my_pid);
   free(r);
