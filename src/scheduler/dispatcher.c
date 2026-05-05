@@ -49,6 +49,8 @@ static const char *policy_name(int scheduler_algorithm) {
     return "RR";
   case 2:
     return "LCF";
+  case 3:
+    return "LET";
   default:
     return "UNKNOWN";
   }
@@ -60,24 +62,21 @@ static void write_stats_header(int fd) {
   write(fd, header, strlen(header));
 }
 
-static void write_stats_row(Scheduler *s, int command_id, Request *event) {
+static void write_stats_row(Scheduler *s, Request *stored_cmd, int command_id,
+                            Request *event) {
   if (s == NULL || event == NULL || s->stats_fd < 0) {
     return;
   }
 
-  long end_time = now_ms();
-  long turnaround = get_created_timestamps(event);
-  long submit_time = end_time - turnaround;
+  long submit_time = stored_cmd != NULL ? get_created_at(stored_cmd)
+                                        : get_created_at(event);
+  long start_time = stored_cmd != NULL ? get_started_at(stored_cmd)
+                                       : submit_time;
   long duration = get_duration(event);
-  long start_time = submit_time;
-
-  gpointer dispatch_value =
-      g_hash_table_lookup(s->dispatch_times, GINT_TO_POINTER(command_id));
-  if (dispatch_value != NULL) {
-    start_time = *(long *)dispatch_value;
-  }
-
+  long turnaround = get_created_at(event);
   long waiting = start_time - submit_time;
+  long end_time = submit_time + turnaround;
+
   if (waiting < 0) {
     waiting = 0;
   }
@@ -254,10 +253,11 @@ void save_log(Request *r, int fd) {
 void remove_command(Scheduler *s, int command_id, Request *r) {
   gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
   if (element != NULL) {
-    write_stats_row(s, command_id, r);
+    GList *elem = (GList *)element;
+    Request *stored_cmd = elem != NULL ? (Request *)elem->data : NULL;
+    write_stats_row(s, stored_cmd, command_id, r);
     save_log(r, s->fd);
     increment_user_duration(s->users_history, get_user_id(r), get_duration(r));
-    GList *elem = (GList *)element;
     free(elem->data);
     g_queue_delete_link(s->list, elem);
     g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));

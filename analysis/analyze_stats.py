@@ -235,14 +235,65 @@ def plot_policy_wait(rows, output_dir):
     policies = sorted(by_policy.keys())
     values = [mean(by_policy[p]) for p in policies]
 
-    plt.figure(figsize=(8, 5))
-    plt.bar(policies, values)
-    plt.title("Average Waiting Time by Policy")
-    plt.xlabel("Policy")
-    plt.ylabel("Waiting Time (ms)")
+    plt.figure(figsize=(10, 5))
+    x_pos = list(range(len(policies)))
+    plt.bar(x_pos, values, color='steelblue', edgecolor='navy', alpha=0.7)
+    plt.xticks(x_pos, policies, fontsize=11)
+    plt.title("Average Waiting Time by Policy", fontsize=12, fontweight='bold')
+    plt.xlabel("Policy", fontsize=11)
+    plt.ylabel("Waiting Time (ms)", fontsize=11)
+    plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "policy_vs_wait.png"), dpi=150)
     plt.close()
+
+
+def plot_policy_comparison_by_parallelism(rows, throughput_rows, output_dir):
+    if plt is None:
+        return
+
+    by_parallelism = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        by_parallelism[row["parallelism"]][row["policy"]].append(row)
+
+    throughput_by_parallelism = defaultdict(lambda: defaultdict(list))
+    for row in throughput_rows:
+        throughput_by_parallelism[row["parallelism"]][row["policy"]].append(
+            row["throughput_cmd_s"]
+        )
+
+    for parallelism in sorted(by_parallelism.keys()):
+        policy_groups = by_parallelism[parallelism]
+        policies = sorted(policy_groups.keys())
+        if not policies:
+            continue
+
+        wait_values = [mean([r["waiting_ms"] for r in policy_groups[policy]]) for policy in policies]
+        turnaround_values = [mean([r["turnaround_ms"] for r in policy_groups[policy]]) for policy in policies]
+        throughput_values = [
+            mean(throughput_by_parallelism[parallelism].get(policy, [0.0]))
+            for policy in policies
+        ]
+
+        x_positions = list(range(len(policies)))
+        bar_width = 0.22
+
+        plt.figure(figsize=(13, 5))
+        plt.bar([x - bar_width for x in x_positions], wait_values, width=bar_width, label="Waiting", color='skyblue', edgecolor='black', linewidth=0.5)
+        plt.bar(x_positions, turnaround_values, width=bar_width, label="Turnaround", color='orange', edgecolor='black', linewidth=0.5)
+        plt.bar([x + bar_width for x in x_positions], throughput_values, width=bar_width, label="Throughput", color='lightgreen', edgecolor='black', linewidth=0.5)
+        plt.xticks(x_positions, policies, fontsize=11)
+        plt.title(f"Policy Comparison at Parallelism {parallelism}", fontsize=12, fontweight='bold')
+        plt.xlabel("Policy", fontsize=11)
+        plt.ylabel("Average Value", fontsize=11)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3, axis='y')
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(output_dir, f"policy_comparison_parallelism_{parallelism}.png"),
+            dpi=150,
+        )
+        plt.close()
 
 
 def plot_parallelism_impact(rows, throughput_rows, output_dir):
@@ -259,30 +310,34 @@ def plot_parallelism_impact(rows, throughput_rows, output_dir):
 
     policies = sorted({row["policy"] for row in rows})
 
-    plt.figure(figsize=(9, 5))
-    for policy in policies:
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+    markers = ['o', 's', '^', 'D']
+    plt.figure(figsize=(10, 5))
+    for idx, policy in enumerate(policies):
         cfg = sorted([k for k in turns_cfg.keys() if k[0] == policy], key=lambda x: x[1])
         x = [parallelism for _, parallelism in cfg]
         y = [mean(turns_cfg[key]) for key in cfg]
-        plt.plot(x, y, marker="o", label=policy)
-    plt.title("Parallelism Impact on Turnaround")
-    plt.xlabel("Parallelism")
-    plt.ylabel("Average Turnaround (ms)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Parallelism Impact on Turnaround", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("Average Turnaround (ms)", fontsize=11)
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "parallelism_vs_turnaround.png"), dpi=150)
     plt.close()
 
-    plt.figure(figsize=(9, 5))
-    for policy in policies:
+    plt.figure(figsize=(10, 5))
+    for idx, policy in enumerate(policies):
         cfg = sorted([k for k in th_cfg.keys() if k[0] == policy], key=lambda x: x[1])
         x = [parallelism for _, parallelism in cfg]
         y = [mean(th_cfg[key]) for key in cfg]
-        plt.plot(x, y, marker="o", label=policy)
-    plt.title("Parallelism Impact on Throughput")
-    plt.xlabel("Parallelism")
-    plt.ylabel("Throughput (commands/s)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Parallelism Impact on Throughput", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("Throughput (commands/s)", fontsize=11)
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "parallelism_vs_throughput.png"), dpi=150)
     plt.close()
@@ -343,67 +398,70 @@ def plot_fairness_metrics(rows, output_dir):
     
     policies = sorted(by_policy.keys())
     
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+    markers = ['o', 's', '^', 'D']
+    
     # Plot 1: Coefficient of Variation for Waiting Time
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["cv_wait"] for d in data]
-        plt.plot(x, y, marker="o", label=policy)
-    plt.title("Fairness: Coefficient of Variation (Waiting Time)\nLower = More Fair")
-    plt.xlabel("Parallelism")
-    plt.ylabel("CV (std_dev/mean)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Fairness: Coefficient of Variation (Waiting Time)\nLower = More Fair", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("CV (std_dev/mean)", fontsize=11)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "fairness_cv_waiting.png"), dpi=150)
     plt.close()
     
     # Plot 2: Jain's Fairness Index for Waiting Time
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["jain_wait"] for d in data]
-        plt.plot(x, y, marker="s", label=policy)
-    plt.title("Fairness: Jain's Index (Waiting Time)\nHigher = More Fair (1.0 = Perfect)")
-    plt.xlabel("Parallelism")
-    plt.ylabel("Jain's Index (0 to 1)")
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Fairness: Jain's Index (Waiting Time)\nHigher = More Fair (1.0 = Perfect)", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("Jain's Index (0 to 1)", fontsize=11)
     plt.ylim([0, 1.05])
-    plt.legend()
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "fairness_jain_waiting.png"), dpi=150)
     plt.close()
     
     # Plot 3: Coefficient of Variation for Turnaround Time
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["cv_turn"] for d in data]
-        plt.plot(x, y, marker="^", label=policy)
-    plt.title("Fairness: Coefficient of Variation (Turnaround Time)\nLower = More Fair")
-    plt.xlabel("Parallelism")
-    plt.ylabel("CV (std_dev/mean)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Fairness: Coefficient of Variation (Turnaround Time)\nLower = More Fair", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("CV (std_dev/mean)", fontsize=11)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "fairness_cv_turnaround.png"), dpi=150)
     plt.close()
     
     # Plot 4: Jain's Fairness Index for Turnaround Time
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["jain_turn"] for d in data]
-        plt.plot(x, y, marker="d", label=policy)
-    plt.title("Fairness: Jain's Index (Turnaround Time)\nHigher = More Fair (1.0 = Perfect)")
-    plt.xlabel("Parallelism")
-    plt.ylabel("Jain's Index (0 to 1)")
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Fairness: Jain's Index (Turnaround Time)\nHigher = More Fair (1.0 = Perfect)", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("Jain's Index (0 to 1)", fontsize=11)
     plt.ylim([0, 1.05])
-    plt.legend()
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "fairness_jain_turnaround.png"), dpi=150)
@@ -472,69 +530,71 @@ def plot_slowdown_metrics(rows, output_dir):
         })
     
     policies = sorted(by_policy.keys())
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+    markers = ['o', 's', '^', 'D']
     
     # Plot 1: Mean Slowdown vs Parallelism
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["mean_slowdown"] for d in data]
-        plt.plot(x, y, marker="o", label=policy)
-    plt.title("Slowdown: Average Normalized Turnaround Time\nLower = Better (1.0 = No Delay)")
-    plt.xlabel("Parallelism")
-    plt.ylabel("Mean Slowdown (Turnaround/Duration)")
-    plt.axhline(y=1.0, color="green", linestyle=":", alpha=0.5, label="Ideal (1.0)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Slowdown: Average Normalized Turnaround Time\nLower = Better (1.0 = No Delay)", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("Mean Slowdown (Turnaround/Duration)", fontsize=11)
+    plt.axhline(y=1.0, color="green", linestyle=":", linewidth=2, alpha=0.7, label="Ideal (1.0)")
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "slowdown_mean.png"), dpi=150)
     plt.close()
     
     # Plot 2: P95 Slowdown
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["p95_slowdown"] for d in data]
-        plt.plot(x, y, marker="s", label=policy)
-    plt.title("Slowdown: 95th Percentile\nWorst 5% of Commands - Lower = Better")
-    plt.xlabel("Parallelism")
-    plt.ylabel("P95 Slowdown")
-    plt.axhline(y=1.0, color="green", linestyle=":", alpha=0.5, label="Ideal (1.0)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Slowdown: 95th Percentile\nWorst 5% of Commands - Lower = Better", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("P95 Slowdown", fontsize=11)
+    plt.axhline(y=1.0, color="green", linestyle=":", linewidth=2, alpha=0.7, label="Ideal (1.0)")
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "slowdown_p95.png"), dpi=150)
     plt.close()
     
     # Plot 3: P99 Slowdown
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["p99_slowdown"] for d in data]
-        plt.plot(x, y, marker="^", label=policy)
-    plt.title("Slowdown: 99th Percentile\nWorst 1% of Commands - Lower = Better")
-    plt.xlabel("Parallelism")
-    plt.ylabel("P99 Slowdown")
-    plt.axhline(y=1.0, color="green", linestyle=":", alpha=0.5, label="Ideal (1.0)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Slowdown: 99th Percentile\nWorst 1% of Commands - Lower = Better", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("P99 Slowdown", fontsize=11)
+    plt.axhline(y=1.0, color="green", linestyle=":", linewidth=2, alpha=0.7, label="Ideal (1.0)")
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "slowdown_p99.png"), dpi=150)
     plt.close()
     
     # Plot 4: Slowdown CV (fairness)
-    plt.figure(figsize=(10, 5))
-    for policy in policies:
+    plt.figure(figsize=(11, 5))
+    for idx, policy in enumerate(policies):
         data = sorted(by_policy[policy], key=lambda x: x["parallelism"])
         x = [d["parallelism"] for d in data]
         y = [d["cv_slowdown"] for d in data]
-        plt.plot(x, y, marker="d", label=policy)
-    plt.title("Slowdown Fairness: Coefficient of Variation\nLower = More Fair (Equal Slowdown)")
-    plt.xlabel("Parallelism")
-    plt.ylabel("CV (std_dev/mean)")
-    plt.legend()
+        plt.plot(x, y, marker=markers[idx], markersize=8, linewidth=2.5, label=policy, color=colors[idx])
+    plt.title("Slowdown Fairness: Coefficient of Variation\nLower = More Fair (Equal Slowdown)", fontsize=12, fontweight='bold')
+    plt.xlabel("Parallelism", fontsize=11)
+    plt.ylabel("CV (std_dev/mean)", fontsize=11)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "slowdown_cv.png"), dpi=150)
@@ -556,13 +616,14 @@ def plot_slowdown_distribution(rows, output_dir):
         return
     
     # Box plot of slowdown distribution
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
     data = [by_policy[policy] for policy in policies]
-    bp = plt.boxplot(data, labels=policies, showfliers=True)
-    plt.title("Slowdown Distribution by Policy\nBox: 25-75%, Line: Median, Dots: Outliers")
-    plt.ylabel("Slowdown (Turnaround/Duration)")
-    plt.axhline(y=1.0, color="green", linestyle=":", alpha=0.5, label="Ideal (1.0)")
-    plt.legend()
+    bp = plt.boxplot(data, tick_labels=policies, showfliers=True, widths=0.6)
+    plt.title("Slowdown Distribution by Policy\nBox: 25-75%, Line: Median, Dots: Outliers", fontsize=12, fontweight='bold')
+    plt.ylabel("Slowdown (Turnaround/Duration)", fontsize=11)
+    plt.xlabel("Policy", fontsize=11)
+    plt.axhline(y=1.0, color="green", linestyle=":", alpha=0.5, linewidth=2, label="Ideal (1.0)")
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "slowdown_distribution.png"), dpi=150)
@@ -580,6 +641,7 @@ def main():
 
     export_summary(rows, throughput_rows, output_dir)
     plot_policy_wait(rows, output_dir)
+    plot_policy_comparison_by_parallelism(rows, throughput_rows, output_dir)
     plot_parallelism_impact(rows, throughput_rows, output_dir)
     plot_user_distribution(rows, output_dir)
     plot_fairness_metrics(rows, output_dir)

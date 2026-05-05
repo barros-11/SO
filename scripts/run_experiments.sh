@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 REPEATS="${REPEATS:-3}"
-POLICIES="${POLICIES:-0 1 2}"
+POLICIES="${POLICIES:-0 1 2 3}"
 PARALLELISM="${PARALLELISM:-1 2 4 8}"
 STATS_FILE="${STATS_FILE:-tmp/stats.csv}"
 CLEAR_STATS="${CLEAR_STATS:-1}"
