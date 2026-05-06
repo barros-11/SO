@@ -59,7 +59,7 @@ void add_command_lcf(int user_id, double created_at, int command_id,
   }
 
   //  Add the new command to the user's personal queue
-  Command *cmd = command_create(user_id, command_id);
+  Command *cmd = command_create(user_id, command_id, (long)created_at);
   g_queue_push_tail(user->pending_commands, cmd);
 
   // Update their score and let GLib automatically shift them to the right spot!
