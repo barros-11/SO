@@ -225,23 +225,32 @@ def export_summary(rows, throughput_rows, output_dir):
             )
 
 
-def plot_policy_wait(rows, output_dir):
+def plot_policy_wait(rows, throughput_rows, output_dir):
     if plt is None:
         return
+
     by_policy = defaultdict(list)
     for row in rows:
         by_policy[row["policy"]].append(row["waiting_ms"])
 
+    throughput_by_policy = defaultdict(list)
+    for row in throughput_rows:
+        throughput_by_policy[row["policy"]].append(row["throughput_cmd_s"])
+
     policies = sorted(by_policy.keys())
-    values = [mean(by_policy[p]) for p in policies]
+    wait_values = [mean(by_policy[p]) for p in policies]
+    throughput_values = [mean(throughput_by_policy[p]) if throughput_by_policy[p] else 0.0 for p in policies]
 
     plt.figure(figsize=(10, 5))
     x_pos = list(range(len(policies)))
-    plt.bar(x_pos, values, color='steelblue', edgecolor='navy', alpha=0.7)
+    bar_width = 0.35
+    plt.bar([x - bar_width / 2 for x in x_pos], wait_values, width=bar_width, color='steelblue', edgecolor='navy', alpha=0.7, label="Waiting Time (ms)")
+    plt.bar([x + bar_width / 2 for x in x_pos], throughput_values, width=bar_width, color='lightgreen', edgecolor='darkgreen', alpha=0.7, label="Throughput (commands/s)")
     plt.xticks(x_pos, policies, fontsize=11)
-    plt.title("Average Waiting Time by Policy", fontsize=12, fontweight='bold')
+    plt.title("Average Waiting Time and Throughput by Policy", fontsize=12, fontweight='bold')
     plt.xlabel("Policy", fontsize=11)
-    plt.ylabel("Waiting Time (ms)", fontsize=11)
+    plt.ylabel("Metric Value", fontsize=11)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "policy_vs_wait.png"), dpi=150)
@@ -278,22 +287,54 @@ def plot_policy_comparison_by_parallelism(rows, throughput_rows, output_dir):
         x_positions = list(range(len(policies)))
         bar_width = 0.22
 
-        plt.figure(figsize=(13, 5))
-        plt.bar([x - bar_width for x in x_positions], wait_values, width=bar_width, label="Waiting", color='skyblue', edgecolor='black', linewidth=0.5)
-        plt.bar(x_positions, turnaround_values, width=bar_width, label="Turnaround", color='orange', edgecolor='black', linewidth=0.5)
-        plt.bar([x + bar_width for x in x_positions], throughput_values, width=bar_width, label="Throughput", color='lightgreen', edgecolor='black', linewidth=0.5)
-        plt.xticks(x_positions, policies, fontsize=11)
-        plt.title(f"Policy Comparison at Parallelism {parallelism}", fontsize=12, fontweight='bold')
-        plt.xlabel("Policy", fontsize=11)
-        plt.ylabel("Average Value", fontsize=11)
-        plt.legend(fontsize=10)
-        plt.grid(True, alpha=0.3, axis='y')
-        plt.tight_layout()
+        fig, ax_left = plt.subplots(figsize=(13, 5))
+        ax_right = ax_left.twinx()
+
+        wait_bars = ax_left.bar(
+            [x - bar_width for x in x_positions],
+            wait_values,
+            width=bar_width,
+            label="Waiting",
+            color='skyblue',
+            edgecolor='black',
+            linewidth=0.5,
+        )
+        turnaround_bars = ax_left.bar(
+            x_positions,
+            turnaround_values,
+            width=bar_width,
+            label="Turnaround",
+            color='orange',
+            edgecolor='black',
+            linewidth=0.5,
+        )
+        throughput_bars = ax_right.bar(
+            [x + bar_width for x in x_positions],
+            throughput_values,
+            width=bar_width,
+            label="Throughput",
+            color='lightgreen',
+            edgecolor='black',
+            linewidth=0.5,
+        )
+
+        ax_left.set_xticks(x_positions)
+        ax_left.set_xticklabels(policies, fontsize=11)
+        ax_left.set_title(f"Policy Comparison at Parallelism {parallelism}", fontsize=12, fontweight='bold')
+        ax_left.set_xlabel("Policy", fontsize=11)
+        ax_left.set_ylabel("Waiting / Turnaround (ms)", fontsize=11)
+        ax_right.set_ylabel("Throughput (commands/s)", fontsize=11)
+        ax_left.grid(True, alpha=0.3, axis='y')
+
+        handles = [wait_bars, turnaround_bars, throughput_bars]
+        labels = [handle.get_label() for handle in handles]
+        ax_left.legend(handles, labels, fontsize=10, loc="upper left")
+        fig.tight_layout()
         plt.savefig(
             os.path.join(output_dir, f"policy_comparison_parallelism_{parallelism}.png"),
             dpi=150,
         )
-        plt.close()
+        plt.close(fig)
 
 
 def plot_parallelism_impact(rows, throughput_rows, output_dir):
@@ -640,7 +681,7 @@ def main():
     throughput_rows = build_throughput(rows)
 
     export_summary(rows, throughput_rows, output_dir)
-    plot_policy_wait(rows, output_dir)
+    plot_policy_wait(rows, throughput_rows, output_dir)
     plot_policy_comparison_by_parallelism(rows, throughput_rows, output_dir)
     plot_parallelism_impact(rows, throughput_rows, output_dir)
     plot_user_distribution(rows, output_dir)
