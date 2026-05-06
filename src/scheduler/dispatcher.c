@@ -1,9 +1,7 @@
 #include "scheduler/dispatcher.h"
-#include "request.h"
-#include "scheduler/command.h"
 #include "scheduler/fcfs.h"
-#include "scheduler/historical.h"
 #include "scheduler/least_commands_first.h"
+#include "scheduler/less_execution_time.h"
 #include "scheduler/round_robin.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -12,7 +10,7 @@
 #include <unistd.h>
 
 struct scheduler {
-  void (*addCommand)(int user_id, double created_timestamps, int command_id,
+  void (*addCommand)(int user_id, double created_at, int command_id,
                      void *data); // returns the command_id
   Request *(*getNext)(void *data);
   void (*cleanup)(void *data);
@@ -58,14 +56,15 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     break;
   case 2:
     initialize_scheduler_lcf(s);
-    snprintf(buffer, sizeof(buffer),
-             "[Scheduler] Least Commands First selected!\n");
+    printf("[Scheduler] Least Commands First selected!\n");
+    break;
+  case 3:
+    initialize_scheduler_let(s);
+    printf("[Scheduler] Less Execution Time selected!\n");
     break;
   default:
     initialize_scheduler_fcfs(s);
-    snprintf(buffer, sizeof(buffer),
-             "[Scheduler] Invalid algorithm selected! Defaulting to First Come "
-             "First Served\n");
+    printf("[Scheduler] Unknown algorithm, defaulting to FCFS.\n");
     break;
   }
   write(STDOUT_FILENO, buffer, strlen(buffer));
@@ -84,8 +83,7 @@ Request *get_next(Scheduler *s) { return s->getNext(s->data); }
 int has_commands(Scheduler *s) { return s->has_commands(s->data); }
 
 void set_add_command_function(Scheduler *s,
-                              void (*addCommand)(int user_id,
-                                                 double created_timestamps,
+                              void (*addCommand)(int user_id, double created_at,
                                                  int command_id, void *data)) {
   s->addCommand = addCommand;
 }
@@ -155,7 +153,7 @@ void save_log(Request *r, int fd) {
   int user_id = get_user_id(r);
   int command_id = get_command_id(r);
   long duration = get_duration(r);
-  long time_since_creation = get_created_timestamps(r);
+  long time_since_creation = get_created_at(r);
 
   int len = snprintf(buffer, sizeof(buffer),
                      "user-id: %d, command-id: %d, time_since_creation: %ld "
@@ -188,8 +186,9 @@ void insert_command(Scheduler *s, Request *cmd_info) {
 
   set_user_id(get_user_id(cmd_info), cmd);
   set_command_id(get_command_id(cmd_info), cmd);
-  set_created_timestamps(get_created_timestamps(cmd_info), cmd);
+  set_created_at(get_created_at(cmd_info), cmd);
   set_duration(cmd, get_duration(cmd_info));
+  set_started_at(cmd, get_started_at(cmd_info));
   set_status(get_status(cmd_info), cmd);
 
   g_queue_push_tail(s->list, cmd);
@@ -198,3 +197,5 @@ void insert_command(Scheduler *s, Request *cmd_info) {
 }
 
 Historical *get_users_history(Scheduler *s) { return s->users_history; }
+
+GQueue *get_running_commands(Scheduler *s) { return s->list; }

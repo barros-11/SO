@@ -67,7 +67,7 @@ void add_command_lcf(int user_id, double created_at, int command_id,
   g_sequence_sort_changed(user->seq_iter, compare_lcf_nodes, NULL);
 }
 
-Request *get_next_lcf(void *data) {
+static Request *get_next_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
 
   if (g_sequence_is_empty(lcf->sorted_users)) {
@@ -84,8 +84,9 @@ Request *get_next_lcf(void *data) {
   if (result != NULL) {
     set_user_id(command_get_user_id(cmd_info), result);
     set_command_id(command_get_command_id(cmd_info), result);
-    set_created_timestamps(0, result);
+    set_created_at(command_get_created_at(cmd_info), result);
     set_duration(result, 0);
+    set_started_at(result, 0);
     set_status(EXECUTE, result);
   }
   command_free(cmd_info);
@@ -103,12 +104,12 @@ Request *get_next_lcf(void *data) {
   return result;
 }
 
-int has_commands_lcf(void *data) {
+static int has_commands_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
   return !g_sequence_is_empty(lcf->sorted_users);
 }
 
-void cleanup_lcf(void *data) {
+static void cleanup_lcf(void *data) {
   LcfData *lcf = (LcfData *)data;
 
   GSequenceIter *iter = g_sequence_get_begin_iter(lcf->sorted_users);
@@ -131,7 +132,7 @@ void cleanup_lcf(void *data) {
   free(lcf);
 }
 
-char *list_commands_lcf(void *data) {
+static char *list_commands_lcf(void *data) {
   GString *string = g_string_new("Scheduled\n");
 
   if (!has_commands_lcf(data)) {
