@@ -43,14 +43,16 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
   s->list = g_queue_new();
   s->total_commands = 0;
   s->users_history = load_history();
+  char buffer[128];
   switch (scheduler_algorithm) {
   case 0:
     initialize_scheduler_fcfs(s);
-    printf("[Scheduler] First Come First Served selected!\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] First Come First Served selected!\n");
     break;
   case 1:
     initialize_scheduler_rr(s);
-    printf("[Scheduler] Round Robin selected!\n");
+    snprintf(buffer, sizeof(buffer), "[Scheduler] Round Robin selected!\n");
     break;
   case 2:
     initialize_scheduler_lcf(s);
@@ -65,6 +67,7 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     printf("[Scheduler] Unknown algorithm, defaulting to FCFS.\n");
     break;
   }
+  write(STDOUT_FILENO, buffer, strlen(buffer));
   return s;
 }
 
@@ -123,7 +126,7 @@ void append_to_string(gpointer data, gpointer user_data) {
 
 char *list_commands(Scheduler *s) {
   GString *result = g_string_new("");
-  g_string_append(result, "\n-- \nExecuting\n");
+  g_string_append(result, "\n---\nExecuting\n");
   if (s->list->length == 0)
     g_string_append(result, "No commands executing\n");
   else
@@ -162,7 +165,7 @@ void save_log(Request *r, int fd) {
   }
 }
 
-void remove_command(Scheduler *s, int command_id, Request *r) {
+int remove_command(Scheduler *s, int command_id, Request *r) {
   gpointer element = g_hash_table_lookup(s->table, GINT_TO_POINTER(command_id));
   if (element != NULL) {
     save_log(r, s->fd);
@@ -171,7 +174,9 @@ void remove_command(Scheduler *s, int command_id, Request *r) {
     free(elem->data);
     g_queue_delete_link(s->list, elem);
     g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));
+    return 0;
   }
+  return -1;
 }
 
 void insert_command(Scheduler *s, Request *cmd_info) {

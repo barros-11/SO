@@ -9,6 +9,7 @@
 #include "request.h"
 #include "runner/communication.h"
 #include "runner/executor.h"
+#include <glib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +33,6 @@ void print_runner_msg(char *message) {
   char buffer[256];
   int len = snprintf(buffer, sizeof(buffer), "[runner] %s\n", message);
   if (len > 0) {
-    // Uso de write para garantir atomicidade e cumprir restrições da UC
     write(STDOUT_FILENO, buffer, len);
   }
 }
@@ -98,6 +98,8 @@ int main(int argc, char *argv[]) {
 
     if (wait_for_go(my_pid) == -1) {
       print_runner_msg("Controller não aceita mais comandos");
+      cleanup_pipe(my_pid);
+      free(r);
       return 1;
     }
 
@@ -106,7 +108,22 @@ int main(int argc, char *argv[]) {
 
     long execution_start_ms = now_ms(CLOCK_MONOTONIC);
 
-    execute_command(argc - 3, &argv[3]);
+    char **argv_exec = NULL;
+    int argc_exec = 0;
+    if (!g_shell_parse_argv(argv[3], &argc_exec, &argv_exec, NULL)) {
+      print_runner_msg("Erro ao parsear o comando");
+      cleanup_pipe(my_pid);
+      free(r);
+      return 1;
+    }
+    execute_command(argc_exec, argv_exec, fd);
+
+    for (int i = 0; i < argc_exec; i++) {
+      if (argv_exec[i] != NULL) {
+        g_free(argv_exec[i]);
+      }
+    }
+    g_free(argv_exec);
 
     long execution_end_ms = now_ms(CLOCK_MONOTONIC);
     long duration_execution = execution_end_ms - execution_start_ms;
@@ -131,7 +148,7 @@ int main(int argc, char *argv[]) {
     set_status(LIST, r);
 
     if (send_to_controller(r, fd) != 0) {
-      print_runner_msg("Erro: o controller não está a correr");
+      print_runner_msg("[runner] Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
@@ -144,7 +161,7 @@ int main(int argc, char *argv[]) {
     set_status(END, r);
 
     if (send_to_controller(r, fd) != 0) {
-      print_runner_msg("Erro: o controller não está a correr");
+      print_runner_msg("[runner] Erro: o controller não está a correr");
       cleanup_pipe(my_pid);
       free(r);
       return 1;
@@ -156,12 +173,11 @@ int main(int argc, char *argv[]) {
 
     wait_for_go(my_pid);
     print_runner_msg("controller exited.");
-  }
-  else {
-      write(STDERR_FILENO, "Erro: Argumento invalido\n", 25);
-      cleanup_pipe(my_pid);
-      free(r);
-      return 1;
+  } else {
+    write(STDERR_FILENO, "[runner] Erro: Argumento invalido\n", 25);
+    cleanup_pipe(my_pid);
+    free(r);
+    return 1;
   }
   cleanup_pipe(my_pid);
   free(r);

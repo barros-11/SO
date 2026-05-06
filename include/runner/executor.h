@@ -7,8 +7,10 @@
  * Não deve utilizar a função system() ou o interpretador bash[cite: 37].
  * * @param argc Número de argumentos no array.
  * @param argv Array de strings contendo o comando e os seus argumentos.
+ * @param controller_fd File descriptor para comunicação com o Controller (para
+ * fechar nos processos filhos).
  * @return Retorna o status de saída do comando executado.
  */
-int execute_command(int argc, char *argv[]);
+int execute_command(int argc, char *argv[], int controller_fd);
 
 #endif // EXECUTOR_H
