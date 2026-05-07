@@ -14,7 +14,7 @@
 
 struct scheduler {
   void (*addCommand)(int user_id, double created_at, int command_id,
-                     void *data); // returns the command_id
+  void *data); // returns the command_id
   Request *(*getNext)(void *data);
   void (*cleanup)(void *data);
   int (*has_commands)(void *data);
@@ -27,12 +27,12 @@ struct scheduler {
   int scheduler_algorithm;
   int max_parallelism;
   long run_id;
+  const char *history_mode;
 
   Historical *users_history;
 
   GHashTable *table;
   GQueue *list;
-  GHashTable *dispatch_times;
 };
 
 static long now_ms(void) {
@@ -58,7 +58,7 @@ static const char *policy_name(int scheduler_algorithm) {
 
 static void write_stats_header(int fd) {
   const char *header =
-      "run_id,policy,parallelism,user_id,command_id,submit_time_ms,start_time_ms,end_time_ms,duration_ms,turnaround_ms,waiting_ms\n";
+      "run_id,history_mode,policy,parallelism,user_id,command_id,submit_time_ms,start_time_ms,end_time_ms,duration_ms,turnaround_ms,waiting_ms\n";
   write(fd, header, strlen(header));
 }
 
@@ -83,11 +83,11 @@ static void write_stats_row(Scheduler *s, Request *stored_cmd, int command_id,
 
   char buffer[256];
   int len = snprintf(buffer, sizeof(buffer),
-                     "%ld,%s,%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld\n",
-                     s->run_id, policy_name(s->scheduler_algorithm),
-                     s->max_parallelism, get_user_id(event), command_id,
-                     submit_time, start_time, end_time, duration, turnaround,
-                     waiting);
+                     "%ld,%s,%s,%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld\n",
+                     s->run_id, s->history_mode,
+                     policy_name(s->scheduler_algorithm), s->max_parallelism,
+                     get_user_id(event), command_id, submit_time, start_time,
+                     end_time, duration, turnaround, waiting);
 
   if (len > 0) {
     write(s->stats_fd, buffer, len);
@@ -97,6 +97,7 @@ static void write_stats_row(Scheduler *s, Request *stored_cmd, int command_id,
 Scheduler *initialize_scheduler(int scheduler_algorithm) {
   const char *stats_path = getenv("STATS_CSV");
   const char *parallelism_env = getenv("PARALLELISM");
+  const char *history_mode_env = getenv("HISTORY_MODE");
   struct stat st;
 
   Scheduler *s = malloc(sizeof(struct scheduler));
@@ -126,10 +127,9 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
   s->scheduler_algorithm = scheduler_algorithm;
   s->max_parallelism = parallelism_env != NULL ? atoi(parallelism_env) : 0;
   s->run_id = now_ms();
+  s->history_mode = history_mode_env != NULL ? history_mode_env : "unknown";
   s->table = g_hash_table_new(g_direct_hash, g_direct_equal);
   s->list = g_queue_new();
-  s->dispatch_times =
-      g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
   s->total_commands = 0;
   s->users_history = load_history();
   char buffer[128];
@@ -145,15 +145,18 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     break;
   case 2:
     initialize_scheduler_lcf(s);
-    printf("[Scheduler] Least Commands First selected!\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] Least Commands First selected!\n");
     break;
   case 3:
     initialize_scheduler_let(s);
-    printf("[Scheduler] Less Execution Time selected!\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] Less Execution Time selected!\n");
     break;
   default:
     initialize_scheduler_fcfs(s);
-    printf("[Scheduler] Unknown algorithm, defaulting to FCFS.\n");
+    snprintf(buffer, sizeof(buffer),
+             "[Scheduler] Unknown algorithm, defaulting to FCFS.\n");
     break;
   }
   write(STDOUT_FILENO, buffer, strlen(buffer));
@@ -198,7 +201,6 @@ void set_list_commands_function(Scheduler *s,
 
 void cleanup(Scheduler *s) {
   save_history(s->users_history);
-  g_hash_table_destroy(s->dispatch_times);
   g_hash_table_destroy(s->table);
   g_queue_free_full(s->list, free);
   s->cleanup(s->data);
@@ -263,7 +265,6 @@ int remove_command(Scheduler *s, int command_id, Request *r) {
     free(elem->data);
     g_queue_delete_link(s->list, elem);
     g_hash_table_remove(s->table, GINT_TO_POINTER(command_id));
-    g_hash_table_remove(s->dispatch_times, GINT_TO_POINTER(command_id));
     return 0;
   }
   return -1;

@@ -7,9 +7,10 @@ cd "$ROOT_DIR"
 REPEATS="${REPEATS:-3}"
 POLICIES="${POLICIES:-0 1 2 3}"
 PARALLELISM="${PARALLELISM:-1 2 4 8}"
+HISTORY_MODES="${HISTORY_MODES:-cold warm}"
 STATS_FILE="${STATS_FILE:-tmp/stats.csv}"
 CLEAR_STATS="${CLEAR_STATS:-1}"
-CLEAR_HISTORY="${CLEAR_HISTORY:-1}"
+USER4_PERIOD="${USER4_PERIOD:-4}"
 LOCK_DIR="tmp/.experiments.lock"
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -41,20 +42,36 @@ wait_for_controller_ready() {
 submit_workload() {
   local runner_pids=()
   local failures=0
+  local user1_remaining=8
+  local user2_remaining=6
+  local user3_remaining=4
+  local round=0
 
-  for _ in $(seq 1 8); do
-    ./bin/runner -e 1 sleep 1 >/dev/null 2>&1 &
-    runner_pids+=("$!")
-  done
+  while (( user1_remaining > 0 || user2_remaining > 0 || user3_remaining > 0 )); do
+    round=$((round + 1))
 
-  for _ in $(seq 1 6); do
-    ./bin/runner -e 2 sleep 2 >/dev/null 2>&1 &
-    runner_pids+=("$!")
-  done
+    if (( user1_remaining > 0 )); then
+      ./bin/runner -e 1 "sleep 0.1" >/dev/null 2>&1 &
+      runner_pids+=("$!")
+      user1_remaining=$((user1_remaining - 1))
+    fi
 
-  for _ in $(seq 1 4); do
-    ./bin/runner -e 3 sleep 4 >/dev/null 2>&1 &
-    runner_pids+=("$!")
+    if (( user2_remaining > 0 )); then
+      ./bin/runner -e 2 "sleep 0.2" >/dev/null 2>&1 &
+      runner_pids+=("$!")
+      user2_remaining=$((user2_remaining - 1))
+    fi
+
+    if (( user3_remaining > 0 )); then
+      ./bin/runner -e 3 "sleep 0.4" >/dev/null 2>&1 &
+      runner_pids+=("$!")
+      user3_remaining=$((user3_remaining - 1))
+    fi
+
+    if (( USER4_PERIOD > 0 && round % USER4_PERIOD == 0 )); then
+      ./bin/runner -e 4 "sleep 0.8" >/dev/null 2>&1 &
+      runner_pids+=("$!")
+    fi
   done
 
   for pid in "${runner_pids[@]}"; do
@@ -86,34 +103,40 @@ fi
 
 echo "[tests] Writing stats to $STATS_FILE"
 
-for policy in $POLICIES; do
-  for parallelism in $PARALLELISM; do
-    for run in $(seq 1 "$REPEATS"); do
-      echo "[tests] policy=$policy parallelism=$parallelism run=$run/$REPEATS"
-
-      if [[ "$CLEAR_HISTORY" == "1" ]]; then
+for history_mode in $HISTORY_MODES; do
+  for policy in $POLICIES; do
+    for parallelism in $PARALLELISM; do
+      if [[ "$history_mode" == "warm" ]]; then
         rm -f historical.bin
       fi
 
-      STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
-      ctrl_pid="$!"
+      for run in $(seq 1 "$REPEATS"); do
+        echo "[tests] history=$history_mode policy=$policy parallelism=$parallelism run=$run/$REPEATS"
 
-      if ! wait_for_controller_ready; then
-        echo "[tests] controller failed to initialize for policy=$policy parallelism=$parallelism"
-        kill "$ctrl_pid" >/dev/null 2>&1 || true
+        if [[ "$history_mode" == "cold" ]]; then
+          rm -f historical.bin
+        fi
+
+        HISTORY_MODE="$history_mode" STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
+        ctrl_pid="$!"
+
+        if ! wait_for_controller_ready; then
+          echo "[tests] controller failed to initialize for history=$history_mode policy=$policy parallelism=$parallelism"
+          kill "$ctrl_pid" >/dev/null 2>&1 || true
+          ctrl_pid=""
+          continue
+        fi
+
+        submit_workload
+
+        if kill -0 "$ctrl_pid" >/dev/null 2>&1; then
+          ./bin/runner -s >/dev/null 2>&1 || true
+          wait "$ctrl_pid" || true
+        else
+          echo "[tests] controller already stopped before shutdown request"
+        fi
         ctrl_pid=""
-        continue
-      fi
-
-      submit_workload
-
-      if kill -0 "$ctrl_pid" >/dev/null 2>&1; then
-        ./bin/runner -s >/dev/null 2>&1 || true
-        wait "$ctrl_pid" || true
-      else
-        echo "[tests] controller already stopped before shutdown request"
-      fi
-      ctrl_pid=""
+      done
     done
   done
 done
