@@ -89,9 +89,9 @@ static GList *find_best_user_link_let(LetData *let, GQueue *users_queue) {
   for (GList *it = best->next; it != NULL; it = it->next) {
     int candidate_user = GPOINTER_TO_INT(it->data);
     int best_user = GPOINTER_TO_INT(best->data);
-     if (compare_users_by_let(let, candidate_user, best_user) < 0)
-       best = it;
-   }
+    if (compare_users_by_let(let, candidate_user, best_user) < 0)
+      best = it;
+  }
 
   return best;
 }

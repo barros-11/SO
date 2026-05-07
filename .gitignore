@@ -61,3 +61,5 @@ dkms.conf
 
 analysis/output/
 analysis/__pycache__
+
+temp/

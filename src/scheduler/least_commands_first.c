@@ -12,8 +12,7 @@ typedef struct {
   int user_id;
   int dynamic_command_count;
   GQueue *pending_commands;
-  GSequenceIter
-      *seq_iter;
+  GSequenceIter *seq_iter;
 } UserEntry;
 
 typedef struct {
@@ -86,9 +85,7 @@ static Request *get_next_lcf(void *data) {
 
   if (g_queue_is_empty(user->pending_commands)) {
     g_sequence_remove(user->seq_iter);
-    g_hash_table_remove(
-        lcf->user_map,
-        GINT_TO_POINTER(user->user_id));
+    g_hash_table_remove(lcf->user_map, GINT_TO_POINTER(user->user_id));
     g_queue_free(user->pending_commands);
     free(user);
   }

@@ -14,7 +14,7 @@
 
 struct scheduler {
   void (*addCommand)(int user_id, double created_at, int command_id,
-  void *data); // returns the command_id
+                     void *data); // returns the command_id
   Request *(*getNext)(void *data);
   void (*cleanup)(void *data);
   int (*has_commands)(void *data);
@@ -58,7 +58,8 @@ static const char *policy_name(int scheduler_algorithm) {
 
 static void write_stats_header(int fd) {
   const char *header =
-      "run_id,history_mode,policy,parallelism,user_id,command_id,submit_time_ms,start_time_ms,end_time_ms,duration_ms,turnaround_ms,waiting_ms\n";
+      "run_id,history_mode,policy,parallelism,user_id,command_id,submit_time_"
+      "ms,start_time_ms,end_time_ms,duration_ms,turnaround_ms,waiting_ms\n";
   write(fd, header, strlen(header));
 }
 
@@ -68,10 +69,10 @@ static void write_stats_row(Scheduler *s, Request *stored_cmd, int command_id,
     return;
   }
 
-  long submit_time = stored_cmd != NULL ? get_created_at(stored_cmd)
-                                        : get_created_at(event);
-  long start_time = stored_cmd != NULL ? get_started_at(stored_cmd)
-                                       : submit_time;
+  long submit_time =
+      stored_cmd != NULL ? get_created_at(stored_cmd) : get_created_at(event);
+  long start_time =
+      stored_cmd != NULL ? get_started_at(stored_cmd) : submit_time;
   long duration = get_duration(event);
   long turnaround = get_created_at(event);
   long waiting = start_time - submit_time;
@@ -82,12 +83,11 @@ static void write_stats_row(Scheduler *s, Request *stored_cmd, int command_id,
   }
 
   char buffer[256];
-  int len = snprintf(buffer, sizeof(buffer),
-                     "%ld,%s,%s,%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld\n",
-                     s->run_id, s->history_mode,
-                     policy_name(s->scheduler_algorithm), s->max_parallelism,
-                     get_user_id(event), command_id, submit_time, start_time,
-                     end_time, duration, turnaround, waiting);
+  int len = snprintf(
+      buffer, sizeof(buffer), "%ld,%s,%s,%d,%d,%d,%ld,%ld,%ld,%ld,%ld,%ld\n",
+      s->run_id, s->history_mode, policy_name(s->scheduler_algorithm),
+      s->max_parallelism, get_user_id(event), command_id, submit_time,
+      start_time, end_time, duration, turnaround, waiting);
 
   if (len > 0) {
     write(s->stats_fd, buffer, len);
@@ -108,9 +108,8 @@ Scheduler *initialize_scheduler(int scheduler_algorithm) {
     return NULL;
   }
 
-  int stats_fd =
-      open(stats_path != NULL ? stats_path : "tmp/stats.csv",
-           O_CREAT | O_APPEND | O_WRONLY, 0666);
+  int stats_fd = open(stats_path != NULL ? stats_path : "tmp/stats.csv",
+                      O_CREAT | O_APPEND | O_WRONLY, 0666);
   if (stats_fd == -1) {
     perror("Error opening stats csv");
     close(fd);
@@ -246,7 +245,8 @@ void save_log(Request *r, int fd) {
   long time_since_creation = get_created_at(r);
 
   int len = snprintf(buffer, sizeof(buffer),
-                     "user-id: %d, command-id: %d, time_since_creation: %ld ms, duration: %ld ms\n",
+                     "user-id: %d, command-id: %d, time_since_creation: %ld "
+                     "ms, duration: %ld ms\n",
                      user_id, command_id, time_since_creation, duration);
 
   if (len > 0) {
