@@ -130,8 +130,7 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
     // we dont close the fd_write because the processes from the list command
     // might need them
     *terminate_command_id = get_command_id(r);
-    controller_feedback("[Controller] Shutdown requested by user %d\n",
-                        get_user_id(r));
+    controller_feedback("[Controller] Shutdown requested\n");
     Request *req = malloc(get_request_size());
     set_status(FLUSH, req);
     write(fd_write, req, get_request_size());
@@ -154,8 +153,7 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
                         get_command_id(r), get_user_id(r));
     break;
   case LIST: {
-    controller_feedback("[Controller] List requested by user %d\n",
-                        get_user_id(r));
+    controller_feedback("[Controller] List requested\n");
     int pid = fork();
     if (pid == 0) {
       char *result = list_commands(scheduler);
@@ -205,7 +203,7 @@ void dispatch_pending_commands(Scheduler *scheduler, int *current_commands,
       notify_runner(command_id, "GO");
 
       controller_feedback(
-          "[Controller] Commmand %d from user %d started executing!\n",
+          "[Controller] Command %d from user %d started executing!\n",
           command_id, get_user_id(cmd));
 
       insert_command(scheduler, cmd);
