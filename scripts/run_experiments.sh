@@ -13,12 +13,18 @@ CLEAR_STATS="${CLEAR_STATS:-1}"
 USER4_PERIOD="${USER4_PERIOD:-4}"
 LOCK_DIR="tmp/.experiments.lock"
 
+PREWARM_U1="${PREWARM_U1:-2}"
+PREWARM_U2="${PREWARM_U2:-4}"
+PREWARM_U3="${PREWARM_U3:-6}"
+PREWARM_U4="${PREWARM_U4:-20}"
+
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   echo "[tests] another experiment run is active. stop it before starting a new one."
   exit 1
 fi
 
 ctrl_pid=""
+
 cleanup() {
   if [[ -n "$ctrl_pid" ]]; then
     kill "$ctrl_pid" >/dev/null 2>&1 || true
@@ -94,6 +100,53 @@ submit_workload() {
   fi
 }
 
+prewarm_history() {
+  local policy="$1"
+  echo "[tests] pre-warming history for policy=$policy ..."
+
+  HISTORY_MODE="warm" STATS_CSV="/dev/null" PARALLELISM="8" \
+    ./bin/controller 8 "$policy" >/dev/null 2>&1 &
+  ctrl_pid="$!"
+
+  if ! wait_for_controller_ready; then
+    echo "[tests] pre-warm controller failed to start for policy=$policy; skipping pre-warm"
+    kill "$ctrl_pid" >/dev/null 2>&1 || true
+    ctrl_pid=""
+    return 1
+  fi
+
+  local prewarm_pids=()
+
+  for (( i=0; i<PREWARM_U1; i++ )); do
+    ./bin/runner -e 1 "sleep 0.05" >/dev/null 2>&1 &
+    prewarm_pids+=("$!")
+  done
+  for (( i=0; i<PREWARM_U2; i++ )); do
+    ./bin/runner -e 2 "sleep 0.05" >/dev/null 2>&1 &
+    prewarm_pids+=("$!")
+  done
+  for (( i=0; i<PREWARM_U3; i++ )); do
+    ./bin/runner -e 3 "sleep 0.05" >/dev/null 2>&1 &
+    prewarm_pids+=("$!")
+  done
+  for (( i=0; i<PREWARM_U4; i++ )); do
+    ./bin/runner -e 4 "sleep 0.05" >/dev/null 2>&1 &
+    prewarm_pids+=("$!")
+  done
+
+  for pid in "${prewarm_pids[@]}"; do
+    wait "$pid" >/dev/null 2>&1 || true
+  done
+
+  if kill -0 "$ctrl_pid" >/dev/null 2>&1; then
+    ./bin/runner -s >/dev/null 2>&1 || true
+    wait "$ctrl_pid" || true
+  fi
+  ctrl_pid=""
+
+  echo "[tests] pre-warm complete. historical.bin is ready."
+}
+
 echo "[tests] Building project"
 make
 
@@ -106,8 +159,10 @@ echo "[tests] Writing stats to $STATS_FILE"
 for history_mode in $HISTORY_MODES; do
   for policy in $POLICIES; do
     for parallelism in $PARALLELISM; do
+
       if [[ "$history_mode" == "warm" ]]; then
         rm -f historical.bin
+        prewarm_history "$policy"
       fi
 
       for run in $(seq 1 "$REPEATS"); do
@@ -117,7 +172,8 @@ for history_mode in $HISTORY_MODES; do
           rm -f historical.bin
         fi
 
-        HISTORY_MODE="$history_mode" STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
+        HISTORY_MODE="$history_mode" STATS_CSV="$STATS_FILE" PARALLELISM="$parallelism" \
+          ./bin/controller "$parallelism" "$policy" >/dev/null 2>&1 &
         ctrl_pid="$!"
 
         if ! wait_for_controller_ready; then
@@ -137,6 +193,7 @@ for history_mode in $HISTORY_MODES; do
         fi
         ctrl_pid=""
       done
+
     done
   done
 done
