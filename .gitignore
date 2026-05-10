@@ -58,3 +58,8 @@ dkms.conf
 
 *.bin
 *.txt
+
+analysis/output/
+analysis/__pycache__
+
+temp/

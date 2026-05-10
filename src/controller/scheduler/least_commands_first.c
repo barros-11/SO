@@ -8,22 +8,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Represents a user
 typedef struct {
   int user_id;
-  int dynamic_command_count; // Tracks history + currently queued commands
-  GQueue *pending_commands;  // Queue of Command* waiting to execute
-  GSequenceIter
-      *seq_iter; // Pointer to this user's position in the sorted sequence
+  int dynamic_command_count;
+  GQueue *pending_commands;
+  GSequenceIter *seq_iter;
 } UserEntry;
 
 typedef struct {
-  GHashTable *user_map;    // Maps user_id -> UserEntry*
-  GSequence *sorted_users; // Sorted sequence of UserEntry* for O(log N) sorting
-  Historical *users_history; // The historical database
+  GHashTable *user_map;
+  GSequence *sorted_users;
+  Historical *users_history;
 } LcfData;
 
-// Sort users by their dynamic command count (Lowest goes first)
 gint compare_lcf_nodes(gconstpointer a, gconstpointer b, gpointer user_data) {
   (void)user_data;
   UserEntry *user_a = (UserEntry *)a;
@@ -41,11 +38,9 @@ void add_command_lcf(int user_id, double created_at, int command_id,
   (void)created_at;
   LcfData *lcf = (LcfData *)data;
 
-  // Lookup the user in the Hash Table
   UserEntry *user =
       g_hash_table_lookup(lcf->user_map, GINT_TO_POINTER(user_id));
 
-  // Create the user if he is not is the scheduler
   if (user == NULL) {
     user = malloc(sizeof(UserEntry));
     user->user_id = user_id;
@@ -58,11 +53,9 @@ void add_command_lcf(int user_id, double created_at, int command_id,
                                               compare_lcf_nodes, NULL);
   }
 
-  //  Add the new command to the user's personal queue
   Command *cmd = command_create(user_id, command_id, (long)created_at);
   g_queue_push_tail(user->pending_commands, cmd);
 
-  // Update their score and let GLib automatically shift them to the right spot!
   user->dynamic_command_count++;
   g_sequence_sort_changed(user->seq_iter, compare_lcf_nodes, NULL);
 }
@@ -74,7 +67,6 @@ static Request *get_next_lcf(void *data) {
     return NULL;
   }
 
-  // Get the user with the lowest command count (first in the sequence)
   GSequenceIter *first_iter = g_sequence_get_begin_iter(lcf->sorted_users);
   UserEntry *user = (UserEntry *)g_sequence_get(first_iter);
 
@@ -91,12 +83,9 @@ static Request *get_next_lcf(void *data) {
   }
   command_free(cmd_info);
 
-  // If this user has no more then he is removed
   if (g_queue_is_empty(user->pending_commands)) {
-    g_sequence_remove(user->seq_iter); // Removes from the sorted tree
-    g_hash_table_remove(
-        lcf->user_map,
-        GINT_TO_POINTER(user->user_id)); // Removes from Hash Table
+    g_sequence_remove(user->seq_iter);
+    g_hash_table_remove(lcf->user_map, GINT_TO_POINTER(user->user_id));
     g_queue_free(user->pending_commands);
     free(user);
   }
@@ -116,7 +105,6 @@ static void cleanup_lcf(void *data) {
   while (!g_sequence_iter_is_end(iter)) {
     UserEntry *user = (UserEntry *)g_sequence_get(iter);
 
-    // Free all remaining commands in this user's queue
     while (!g_queue_is_empty(user->pending_commands)) {
       Command *cmd = g_queue_pop_head(user->pending_commands);
       command_free(cmd);

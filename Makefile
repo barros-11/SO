@@ -19,15 +19,17 @@ LDFLAGS += $(LDFLAGS_$(BUILD_TYPE))
 LDLIBS := $(GLIB_LIBS)
 
 SRC := $(shell find src -name "*.c")
-COMMON_SRC := $(filter-out src/controller.c src/runner/runner.c,$(SRC))
+COMMON_SRC := $(filter-out src/controller/controller.c src/runner/runner.c,$(SRC))
 
 BUILD_DIR := build/$(BUILD_TYPE)
 COMMON_OBJ := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(COMMON_SRC))
-CONTROLLER_OBJ := $(BUILD_DIR)/controller.o
+CONTROLLER_OBJ := $(BUILD_DIR)/controller/controller.o
 RUNNER_OBJ := $(BUILD_DIR)/runner/runner.o
 
 CONTROLLER_BIN := bin/controller
 RUNNER_BIN := bin/runner
+EXPERIMENT_RESULTS := tmp/stats.csv analysis/output
+EXPERIMENT_TEMP := historical.bin tmp/.experiments.lock
 
 RED := \033[1;31m
 WHITE := \033[0m
@@ -84,6 +86,6 @@ clean:
 	@rm -rf obj
 	@rm -f $(CONTROLLER_BIN) $(RUNNER_BIN)
 	@rm -rf tmp/*
-	@printf "\n$(YELLOW)[CLEAN]$(WHITE) Build artifacts removed.\n"
+	@rm -rf $(EXPERIMENT_RESULTS) $(EXPERIMENT_TEMP)
 
 rebuild: clean all

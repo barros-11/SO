@@ -6,7 +6,7 @@
 
 #include <glib.h>
 #include <stdlib.h>
-#include <time.h>
+#include <sys/time.h>
 
 typedef struct {
   GHashTable *users_commands;
@@ -16,11 +16,11 @@ typedef struct {
   Scheduler *scheduler;
 } LetData;
 
-static long now_ms(clockid_t clock_id) {
-  struct timespec ts;
-  if (clock_gettime(clock_id, &ts) != 0)
+static long now_ms(void) {
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) != 0)
     return 0;
-  return (long)(ts.tv_sec * 1000L + ts.tv_nsec / 1000000L);
+  return (long)(tv.tv_sec * 1000L + tv.tv_usec / 1000L);
 }
 
 static long get_active_time_for_user(LetData *let, int user_id) {
@@ -31,7 +31,7 @@ static long get_active_time_for_user(LetData *let, int user_id) {
 static void rebuild_active_time_by_user(LetData *let) {
   g_hash_table_remove_all(let->active_time_by_user);
 
-  long now = now_ms(CLOCK_MONOTONIC);
+  long now = now_ms();
   GQueue *running_commands = get_running_commands(let->scheduler);
   if (running_commands == NULL)
     return;
@@ -89,9 +89,9 @@ static GList *find_best_user_link_let(LetData *let, GQueue *users_queue) {
   for (GList *it = best->next; it != NULL; it = it->next) {
     int candidate_user = GPOINTER_TO_INT(it->data);
     int best_user = GPOINTER_TO_INT(best->data);
-     if (compare_users_by_let(let, candidate_user, best_user) < 0)
-       best = it;
-   }
+    if (compare_users_by_let(let, candidate_user, best_user) < 0)
+      best = it;
+  }
 
   return best;
 }
