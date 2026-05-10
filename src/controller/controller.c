@@ -1,6 +1,7 @@
 #include "request.h"
 #include "scheduler/dispatcher.h"
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -13,6 +14,18 @@ static long now_ms(void) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return tv.tv_sec * 1000L + tv.tv_usec / 1000L;
+}
+
+static void controller_feedback(const char *fmt, ...) {
+  char buf[128];
+  va_list args;
+
+  va_start(args, fmt);
+  int len = vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  if (len > 0)
+    write(STDOUT_FILENO, buf, (size_t)len);
 }
 
 void notify_runner(int command_id, char *msg) {
@@ -117,6 +130,8 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
     // we dont close the fd_write because the processes from the list command
     // might need them
     *terminate_command_id = get_command_id(r);
+    controller_feedback("[Controller] Shutdown requested by user %d\n",
+                        get_user_id(r));
     Request *req = malloc(get_request_size());
     set_status(FLUSH, req);
     write(fd_write, req, get_request_size());
@@ -127,12 +142,20 @@ void process_request(Request *r, Scheduler *scheduler, int *acabou,
     int result_remove = remove_command(scheduler, get_command_id(r), r);
     if (result_remove != -1)
       (*current_commands)--;
+
+    controller_feedback("[Controller] Command %d from user %d terminated!\n",
+                        get_command_id(r), get_user_id(r));
+
     break;
   case EXECUTE:
     add_command(scheduler, get_user_id(r), get_created_at(r),
                 get_command_id(r));
+    controller_feedback("[Controller] Command %d from user %d received\n",
+                        get_command_id(r), get_user_id(r));
     break;
   case LIST: {
+    controller_feedback("[Controller] List requested by user %d\n",
+                        get_user_id(r));
     int pid = fork();
     if (pid == 0) {
       char *result = list_commands(scheduler);
@@ -180,6 +203,11 @@ void dispatch_pending_commands(Scheduler *scheduler, int *current_commands,
       (*current_commands)++;
       set_started_at(cmd, started_at);
       notify_runner(command_id, "GO");
+
+      controller_feedback(
+          "[Controller] Commmand %d from user %d started executing!\n",
+          command_id, get_user_id(cmd));
+
       insert_command(scheduler, cmd);
       free(cmd);
     }
